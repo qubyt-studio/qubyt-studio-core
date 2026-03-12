@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld("editorAPI", {
     ipcRenderer.invoke("create-project-folder", parentDir, folderName),
   openFolderAtPath: (dirPath) =>
     ipcRenderer.invoke("open-folder-at-path", dirPath),
+  openFolderFromDroppedPaths: (paths) =>
+    ipcRenderer.invoke("open-folder-from-dropped-paths", paths),
   writeTemplate: (folderPath, templateId) =>
     ipcRenderer.invoke("write-template", folderPath, templateId),
   getProjectRoot: () => ipcRenderer.invoke("get-project-root"),
@@ -37,6 +39,8 @@ contextBridge.exposeInMainWorld("editorAPI", {
   toggleDevTools: () => ipcRenderer.send("toggle-devtools"),
   newWindow: () => ipcRenderer.send("new-window"),
   openFolderInNewWindow: () => ipcRenderer.invoke("open-folder-in-new-window"),
+  openFolderInNewWindowAtPath: (dirPath) =>
+    ipcRenderer.invoke("open-folder-in-new-window-at-path", dirPath),
   onOpenFolderOnLoad: (fn) => {
     ipcRenderer.on("open-folder-on-load", (_e, path) => fn(path));
   },
@@ -49,5 +53,7 @@ contextBridge.exposeInMainWorld("editorAPI", {
   themeSave: (name, colors) => ipcRenderer.invoke("theme-save", name, colors),
   themeList: () => ipcRenderer.invoke("theme-list"),
   themeLoad: (id) => ipcRenderer.invoke("theme-load", id),
+  themeDelete: (id) => ipcRenderer.invoke("theme-delete", id),
+  themeRename: (id, newName) => ipcRenderer.invoke("theme-rename", id, newName),
   onSplashHide: (fn) => ipcRenderer.on("splash-hide", () => fn()),
 });

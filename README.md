@@ -1,8 +1,8 @@
 # 🚀 Qubyt Studio: Modern Code Editor Ecosystem
 
 ![License](https://img.shields.io/github/license/qubyt-studio/qubyt-studio-core)
-![Version](https://img.shields.io/badge/version-1.0.5-blue)
-![VirusTotal](https://img.shields.io/badge/VirusTotal-0%2F70-brightgreen)
+![Version](https://img.shields.io/badge/version-1.0.6-blue)
+![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 
 > ✓ **Güncel** — Bu README Mart 2026 itibarıyla proje durumunu yansıtmaktadır.
 
@@ -32,7 +32,7 @@ Geliştiriciler ve meraklı kullanıcılar için kaynak koddan çalıştırma:
 Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutuyoruz. Sertifika maliyetleri nedeniyle henüz dijital olarak imzalanmamış olsa da, tüm kod tabanımız şeffaf bir şekilde buradadır.
 
 - **Güvenlik Detayları:** Uygulama içi güvenlik önlemleri (`sandbox`, `contextIsolation`, vb.) için [SECURITY.md](./SECURITY.md) dosyamızı inceleyin.
-- **VirusTotal Raporu:** Her sürüm için 0/70 temiz raporu sunuyoruz. [Güncel Raporu Görüntüle](https://www.virustotal.com/gui/file/2ca3917c42c3dbcfa651dffca5bc57751b69fa68930f2b37f3e65082ab191a76/detection)
+- **VirusTotal Raporu:** Her sürüm için bağımsız tarama raporu sunuyoruz. [Güncel Raporu Görüntüle (v1.0.6)](https://www.virustotal.com/gui/file/ebf0abf901da5223a72a8cece2dfdc7e0b95ef83a58a00e10447206d720cc8e2/detection)
 
 ## 🏗️ Proje Yapısı
 
@@ -40,7 +40,7 @@ Bu depo, uygulamanın çekirdek entegrasyon katmanını içerir:
 
 - **`main.js`**: Uygulamanın ana süreci ve pencere yönetimi.
 - **`preload.js`**: Güvenli IPC köprüsü ve context isolation.
-- **`package.json`**: Bağımlılıklar ve derleme ayarları.
+- **`scripts/`**: Bağımlılık yönetimi ve paketleme (build) betikleri.
 
 ## 🌐 Ekosistemimiz
 

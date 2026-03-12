@@ -1,0 +1,53 @@
+const { contextBridge, ipcRenderer } = require("electron");
+
+contextBridge.exposeInMainWorld("editorAPI", {
+  openFolder: () => ipcRenderer.invoke("open-folder"),
+  pickFolder: () => ipcRenderer.invoke("pick-folder"),
+  createProjectFolder: (parentDir, folderName) =>
+    ipcRenderer.invoke("create-project-folder", parentDir, folderName),
+  openFolderAtPath: (dirPath) =>
+    ipcRenderer.invoke("open-folder-at-path", dirPath),
+  writeTemplate: (folderPath, templateId) =>
+    ipcRenderer.invoke("write-template", folderPath, templateId),
+  getProjectRoot: () => ipcRenderer.invoke("get-project-root"),
+  closeFolder: () => ipcRenderer.invoke("close-folder"),
+  openFile: () => ipcRenderer.invoke("open-file"),
+  getTree: () => ipcRenderer.invoke("get-tree"),
+  readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
+  readDirectory: (dirPath) => ipcRenderer.invoke("read-directory", dirPath),
+  saveFile: (filePath, content) =>
+    ipcRenderer.invoke("save-file", filePath, content),
+  lintFile: (filePath, content) =>
+    ipcRenderer.invoke("lint-file", filePath, content),
+  createFile: (parentDir, name) =>
+    ipcRenderer.invoke("create-file", parentDir, name),
+  createFolder: (parentDir, name) =>
+    ipcRenderer.invoke("create-folder", parentDir, name),
+  deletePath: (targetPath) => ipcRenderer.invoke("delete-path", targetPath),
+  renamePath: (oldPath, newName) =>
+    ipcRenderer.invoke("rename-path", oldPath, newName),
+  movePath: (sourcePath, destDirPath) =>
+    ipcRenderer.invoke("move-path", sourcePath, destDirPath),
+  runPreview: (htmlPath) => ipcRenderer.invoke("run-preview", htmlPath),
+  runScript: (filePath) => ipcRenderer.invoke("run-script", filePath),
+  runTerminalCommand: (command) =>
+    ipcRenderer.invoke("run-terminal-command", command),
+  expandEmmetAtPosition: (source, offset, type) =>
+    ipcRenderer.invoke("emmet-expand-at-position", source, offset, type),
+  toggleDevTools: () => ipcRenderer.send("toggle-devtools"),
+  newWindow: () => ipcRenderer.send("new-window"),
+  openFolderInNewWindow: () => ipcRenderer.invoke("open-folder-in-new-window"),
+  onOpenFolderOnLoad: (fn) => {
+    ipcRenderer.on("open-folder-on-load", (_e, path) => fn(path));
+  },
+  rendererReady: () => ipcRenderer.send("renderer-ready"),
+  quit: () => ipcRenderer.send("app-quit"),
+  windowMinimize: () => ipcRenderer.send("window-minimize"),
+  windowMaximize: () => ipcRenderer.send("window-maximize"),
+  windowClose: () => ipcRenderer.invoke("close-current-window"),
+  windowToggleFullscreen: () => ipcRenderer.send("window-toggle-fullscreen"),
+  themeSave: (name, colors) => ipcRenderer.invoke("theme-save", name, colors),
+  themeList: () => ipcRenderer.invoke("theme-list"),
+  themeLoad: (id) => ipcRenderer.invoke("theme-load", id),
+  onSplashHide: (fn) => ipcRenderer.on("splash-hide", () => fn()),
+});

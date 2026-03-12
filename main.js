@@ -325,6 +325,31 @@ app.whenReady().then(() => {
     return { rootPath: projectRoot, tree };
   });
 
+  /** Dışarıdan sürüklenen dosya/klasör yollarından proje kökünü bulup aç (VS Code tarzı) */
+  ipcMain.handle("open-folder-from-dropped-paths", async (e, paths) => {
+    if (!paths || !Array.isArray(paths) || paths.length === 0)
+      return { error: "Yol yok." };
+    const normalized = paths
+      .filter((p) => typeof p === "string" && p.trim())
+      .map((p) => path.resolve(normalizePath(p)));
+    if (normalized.length === 0) return { error: "Geçerli yol yok." };
+    let common = path.dirname(normalized[0]);
+    for (let i = 1; i < normalized.length; i++) {
+      let dir = path.dirname(normalized[i]);
+      while (dir !== common && !dir.startsWith(common + path.sep)) {
+        const parent = path.dirname(common);
+        if (parent === common) break;
+        common = parent;
+      }
+    }
+    const resolved = path.resolve(common);
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
+      return { error: "Klasör bulunamadı." };
+    projectRoot = resolved;
+    const tree = readDirTree(projectRoot, MAX_TREE_DEPTH);
+    return { rootPath: projectRoot, tree };
+  });
+
   const TEMPLATES = {
     "html5-empty": [
       {
@@ -433,16 +458,22 @@ app.whenReady().then(() => {
   const themesDir = path.join(app.getPath("userData"), "themes");
   ipcMain.handle("theme-save", async (e, themeName, colors) => {
     try {
-      if (!fs.existsSync(themesDir)) fs.mkdirSync(themesDir, { recursive: true });
-      const slug = (themeName || "tema")
-        .trim()
-        .toLowerCase()
-        .replace(/[^a-z0-9\u00c0-\u024f\u0400-\u04ff\s-]/g, "")
-        .replace(/\s+/g, "-")
-        .replace(/-+/g, "-")
-        .slice(0, 64) || "tema";
+      if (!fs.existsSync(themesDir))
+        fs.mkdirSync(themesDir, { recursive: true });
+      const slug =
+        (themeName || "tema")
+          .trim()
+          .toLowerCase()
+          .replace(/[^a-z0-9\u00c0-\u024f\u0400-\u04ff\s-]/g, "")
+          .replace(/\s+/g, "-")
+          .replace(/-+/g, "-")
+          .slice(0, 64) || "tema";
       const filePath = path.join(themesDir, slug + ".json");
-      const data = JSON.stringify({ name: themeName || "Tema", colors: colors || {} }, null, 2);
+      const data = JSON.stringify(
+        { name: themeName || "Tema", colors: colors || {} },
+        null,
+        2,
+      );
       fs.writeFileSync(filePath, data, "utf-8");
       return { ok: true, id: slug, path: filePath };
     } catch (err) {
@@ -475,6 +506,29 @@ app.whenReady().then(() => {
       const raw = fs.readFileSync(filePath, "utf-8");
       const obj = JSON.parse(raw);
       return { name: obj.name, colors: obj.colors || {} };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+  ipcMain.handle("theme-delete", async (e, themeId) => {
+    try {
+      const filePath = path.join(themesDir, themeId + ".json");
+      if (!fs.existsSync(filePath)) return { error: "Tema bulunamadı." };
+      fs.unlinkSync(filePath);
+      return { ok: true };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+  ipcMain.handle("theme-rename", async (e, themeId, newName) => {
+    try {
+      const filePath = path.join(themesDir, themeId + ".json");
+      if (!fs.existsSync(filePath)) return { error: "Tema bulunamadı." };
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const obj = JSON.parse(raw);
+      obj.name = (newName || "").trim() || obj.name;
+      fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), "utf-8");
+      return { ok: true, name: obj.name };
     } catch (err) {
       return { error: err.message };
     }
@@ -884,6 +938,13 @@ app.whenReady().then(() => {
       if (result.canceled || !result.filePaths.length) return { ok: false };
       const folderPath = path.resolve(normalizePath(result.filePaths[0]));
       createWindow(activePort, folderPath);
+      return { ok: true };
+    });
+    ipcMain.handle("open-folder-in-new-window-at-path", async (e, dirPath) => {
+      const resolved = path.resolve(normalizePath(dirPath));
+      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
+        return { ok: false };
+      createWindow(activePort, resolved);
       return { ok: true };
     });
     runApp(port);

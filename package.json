@@ -1,6 +1,6 @@
 {
   "name": "qubyt-studio",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Qubyt Studio — modern masaüstü editör (HTML, CSS, JS , TS)",
   "main": "main.js",
   "scripts": {

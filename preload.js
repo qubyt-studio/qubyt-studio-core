@@ -1,4 +1,20 @@
-const { contextBridge, ipcRenderer } = require("electron");
+const electron = require("electron");
+const { contextBridge, ipcRenderer } = electron;
+const webUtils = electron.webUtils || null;
+
+/** Electron 32+ sandbox: File.path yok; webUtils.getPathForFile kullan. Eski sürümde file.path fallback. */
+function getPathsFromDroppedFiles(fileList) {
+  const paths = [];
+  if (!fileList || !fileList.length) return paths;
+  for (let i = 0; i < fileList.length; i++) {
+    const f = fileList[i];
+    try {
+      const p = webUtils ? webUtils.getPathForFile(f) : (f && f.path) || "";
+      if (p && typeof p === "string") paths.push(p);
+    } catch (_) {}
+  }
+  return paths;
+}
 
 contextBridge.exposeInMainWorld("editorAPI", {
   openFolder: () => ipcRenderer.invoke("open-folder"),
@@ -7,6 +23,7 @@ contextBridge.exposeInMainWorld("editorAPI", {
     ipcRenderer.invoke("create-project-folder", parentDir, folderName),
   openFolderAtPath: (dirPath) =>
     ipcRenderer.invoke("open-folder-at-path", dirPath),
+  getPathsFromDroppedFiles: (fileList) => getPathsFromDroppedFiles(fileList),
   openFolderFromDroppedPaths: (paths) =>
     ipcRenderer.invoke("open-folder-from-dropped-paths", paths),
   writeTemplate: (folderPath, templateId) =>

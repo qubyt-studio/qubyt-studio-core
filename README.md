@@ -6,7 +6,7 @@
 
 > ✓ **Güncel** — Bu README Mart 2026 itibarıyla proje durumunu yansıtmaktadır.
 
-![Qubyt Studio](https://raw.githubusercontent.com/qubyt-studio/qubyt-studio-core/main/assets/banner.png)
+![Qubyt Studio](https://raw.githubusercontent.com/qubyt-studio/qubyt-studio-core/main/banner.png)
 
 Qubyt Studio, modern web teknolojileri ile geliştirilmiş, fütüristik arayüzü ve yüksek performanslı kod yazma deneyimi ile yazılım geliştirme süreçlerini bir üst seviyeye taşımak için tasarlanmıştır.
 

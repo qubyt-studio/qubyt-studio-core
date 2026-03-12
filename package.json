@@ -1,0 +1,110 @@
+{
+  "name": "qubyt-studio",
+  "version": "1.0.5",
+  "description": "Qubyt Studio — modern masaüstü editör (HTML, CSS, JS , TS)",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "postinstall": "node scripts/copy-monaco.js",
+    "prepack": "node scripts/svg-to-icon-png.js && node scripts/ensure-icon-ico.js",
+    "pack": "electron-builder --dir && node scripts/apply-exe-icon.js",
+    "dist": "electron-builder",
+    "predist": "node scripts/clean-dist.js && node scripts/svg-to-icon-png.js && node scripts/ensure-icon-ico.js",
+    "apply-icon": "node scripts/apply-exe-icon.js",
+    "clear-icon-cache": "node scripts/clear-icon-cache.js"
+  },
+  "build": {
+    "afterPack": "./scripts/after-pack.js",
+    "appId": "com.qubyt.studio",
+    "productName": "Qubyt Studio",
+    "icon": "build/icon.png",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "build/**/*",
+      "src/**/*",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.ico",
+      "forceCodeSigning": false,
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "fileAssociations": [
+      {
+        "ext": "html",
+        "name": "HTML Dosyası",
+        "role": "Editor"
+      },
+      {
+        "ext": "htm",
+        "name": "HTML Dosyası",
+        "role": "Editor"
+      },
+      {
+        "ext": "css",
+        "name": "CSS Dosyası",
+        "role": "Editor"
+      },
+      {
+        "ext": "js",
+        "name": "JavaScript Dosyası",
+        "role": "Editor"
+      },
+      {
+        "ext": "mjs",
+        "name": "JavaScript Modülü",
+        "role": "Editor"
+      },
+      {
+        "ext": "cjs",
+        "name": "JavaScript CommonJS",
+        "role": "Editor"
+      },
+      {
+        "ext": "ts",
+        "name": "TypeScript Dosyası",
+        "role": "Editor"
+      },
+      {
+        "ext": "tsx",
+        "name": "TypeScript React",
+        "role": "Editor"
+      }
+    ]
+  },
+  "keywords": [
+    "editor",
+    "qubyt",
+    "studio"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "emmet": "^2.4.11",
+    "esbuild": "^0.24.0",
+    "eslint": "^8.57.0",
+    "monaco-editor": "0.48.0"
+  },
+  "devDependencies": {
+    "electron": "^40.6.1",
+    "electron-builder": "^25.0.0",
+    "rcedit": "^4.0.1",
+    "sharp": "^0.33.5",
+    "to-ico": "^1.1.5"
+  }
+}

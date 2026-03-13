@@ -1,57 +1,86 @@
-# 🚀 Qubyt Studio: Modern Code Editor Ecosystem
+# 🚀 Qubyt Studio: Modern Code Editor
 
-![License](https://img.shields.io/github/license/qubyt-studio/qubyt-studio-core)
-![Version](https://img.shields.io/badge/version-1.0.6-blue)
+![License](https://img.shields.io/badge/license-MIT-blue)
+![Version](https://img.shields.io/badge/version-1.0.7-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
+![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
 > ✓ **Güncel** — Bu README Mart 2026 itibarıyla proje durumunu yansıtmaktadır.
 
-![Qubyt Studio](banner.png)
-
-Qubyt Studio, modern web teknolojileri ile geliştirilmiş, fütüristik arayüzü ve yüksek performanslı kod yazma deneyimi ile yazılım geliştirme süreçlerini bir üst seviyeye taşımak için tasarlanmıştır.
+Qubyt Studio, web geliştirme için tasarlanmış masaüstü bir kod editörüdür. Monaco editör çekirdeği, Emmet ve ESLint entegrasyonu ile HTML, CSS, JavaScript ve TypeScript için hızlı ve rahat bir geliştirme deneyimi sunar.
 
 ## 🌟 Öne Çıkan Özellikler
 
-- **Monaco Editor Entegrasyonu:** VS Code'un kalbi olan Monaco ile en üst düzey kod yazma deneyimi.
-- **Fütüristik UI/UX:** Yazılımcılar için özel olarak tasarlanmış, derinlik ve estetik odaklı arayüz.
-- **3D Desteği:** Three.js ve Babylon.js gibi kütüphanelerle 3D sahne entegrasyonu planları.
-- **Hız ve Hafiflik:** Electron tabanlı optimize edilmiş yapı ile hızlı başlangıç.
+- **Monaco Editor:** VS Code'un kalbi olan Monaco ile sözdizimi vurgulama, tamamlama ve snippet desteği.
+- **Desteklenen diller:** HTML, CSS, JavaScript (.js, .mjs, .cjs), TypeScript (.ts, .tsx).
+- **Debug Tools:** Insert Log (Ctrl+Shift+L), Insert Warn/Error/Debug, Remove Logs, Toggle Logs, Find Logs — Turbo Console Log benzeri özellikler.
+- **Tema Oluşturucu:** Kendi editör temanızı oluşturup kaydedebilirsiniz.
+- **Developer Insights:** Kod yazma istatistikleri, dil kullanımı ve aktivite takibi (yerel, gizlilik odaklı).
+- **ESLint entegrasyonu:** JavaScript dosyalarında otomatik lint ve Problems/Warnings panelleri.
+- **Emmet:** HTML ve CSS için hızlı snippet genişletme.
+- **Terminal:** npm, npx, node komutları; yerel sunucu ile tarayıcı önizleme.
+
+## 📋 Gereksinimler
+
+- **Node.js** 18+ (geliştirme için)
+- **npm** 9+
+- **Windows** (mevcut build hedefi)
 
 ## 🚀 Yerelde Çalıştırma
 
-Geliştiriciler ve meraklı kullanıcılar için kaynak koddan çalıştırma:
+```bash
+git clone <repo-url>
+cd editor-app
+npm install
+npm start
+```
 
-1. Repoyu klonlayın: `git clone https://github.com/qubyt-studio/qubyt-studio-core.git`
-2. Bağımlılıkları yükleyin: `npm install`
-3. Uygulamayı başlatın: `npm start`
+> **Not:** `npm install` sonrası Monaco editör dosyaları otomatik kopyalanır (`postinstall`).
 
-> **Son kullanıcılar için:** Hazır kurulum dosyasını (EXE) resmî sitemizden indirmenizi öneririz. [SECURITY.md](./SECURITY.md) dosyamızda güvenli indirme hakkında bilgi bulabilirsiniz.
+## 📦 Paketleme (Build)
+
+```bash
+npm run dist    # NSIS kurulum + portable EXE (dist/ klasörüne)
+npm run pack    # Paketleme testi (--dir)
+```
+
+## 🏗️ Proje Yapısı
+
+```
+├── main.js              # Electron ana süreç, IPC, pencere yönetimi
+├── preload.js            # Güvenli IPC köprüsü (context isolation)
+├── src/renderer/         # Arayüz: index.html, scripts/, CSS
+│   ├── scripts/          # file-tree, editor-init, debug-tools, theme-creator, dev-insights...
+│   └── *.css             # Stiller
+├── build/                # İkonlar (icon.svg, icon.png, icon.ico)
+├── scripts/              # Build betikleri (copy-monaco, svg-to-icon, after-pack...)
+├── docs/                 # Raporlar (DEBUG_TOOLS_REPORT, DEV_INSIGHTS_HEATMAP...)
+└── SECURITY.md           # Güvenlik detayları
+```
 
 ## 🛡️ Güvenlik ve Şeffaflık
 
 Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutuyoruz. Sertifika maliyetleri nedeniyle henüz dijital olarak imzalanmamış olsa da, tüm kod tabanımız şeffaf bir şekilde buradadır.
 
-- **Güvenlik Detayları:** Uygulama içi güvenlik önlemleri (`sandbox`, `contextIsolation`, vb.) için [SECURITY.md](./SECURITY.md) dosyamızı inceleyin.
-- **VirusTotal Raporu:** Her sürüm için bağımsız tarama raporu sunuyoruz. [Güncel Raporu Görüntüle (v1.0.6)](https://www.virustotal.com/gui/file/ebf0abf901da5223a72a8cece2dfdc7e0b95ef83a58a00e10447206d720cc8e2/detection)
+- **Güvenlik Detayları:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path doğrulama vb.
+- **VirusTotal Raporu:** [Güncel Rapor (v1.0.7)](https://www.virustotal.com/gui/file/269ad526e8475d33ceade5138e7ff787747fcedc67641236e95d50d579118a37)
 
-## 🏗️ Proje Yapısı
+## 🛠️ Teknolojiler
 
-Bu depo, uygulamanın çekirdek entegrasyon katmanını içerir:
-
-- **`main.js`**: Uygulamanın ana süreci ve pencere yönetimi.
-- **`preload.js`**: Güvenli IPC köprüsü ve context isolation.
-- **`scripts/`**: Bağımlılık yönetimi ve paketleme (build) betikleri.
+- **Electron** 40
+- **Monaco Editor** 0.48
+- **Emmet** 2.4
+- **ESLint** 8.57
+- **esbuild** 0.24
 
 ## 🌐 Ekosistemimiz
 
-Qubyt Studio sadece bir editör değil, geniş bir yazılım geliştirme ekosisteminin parçasıdır:
-
-- **ByteOmi**: Algoritma analizi ve bellek yönetimi görselleştirme araçları.
-- **Softyla**: Yazılım eğitimi ve mimari odaklı içerik platformu.
+- **ByteOmi:** Algoritma analizi ve bellek yönetimi görselleştirme.
+- **Softyla:** Yazılım eğitimi ve mimari odaklı içerik platformu.
 
 ## 📩 İletişim
 
-Geri bildirimleriniz ve güvenlik bildirimleriniz için: **qubytstudio@gmail.com**
+Geri bildirim ve güvenlik bildirimi: **qubytstudio@gmail.com**
 
 ---
 

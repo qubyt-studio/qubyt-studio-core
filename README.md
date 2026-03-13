@@ -46,17 +46,17 @@ npm run pack    # Paketleme testi (--dir)
 
 ## 🏗️ Proje Yapısı
 
-```
+## 🏗️ Proje Yapısı
+
 ├── main.js              # Electron ana süreç, IPC, pencere yönetimi
-├── preload.js            # Güvenli IPC köprüsü (context isolation)
-├── src/renderer/         # Arayüz: index.html, scripts/, CSS
-│   ├── scripts/          # file-tree, editor-init, debug-tools, theme-creator, dev-insights...
-│   └── *.css             # Stiller
-├── build/                # İkonlar (icon.svg, icon.png, icon.ico)
-├── scripts/              # Build betikleri (copy-monaco, svg-to-icon, after-pack...)
-├── docs/                 # Raporlar (DEBUG_TOOLS_REPORT, DEV_INSIGHTS_HEATMAP...)
-└── SECURITY.md           # Güvenlik detayları
-```
+├── preload.js           # Güvenli IPC köprüsü (context isolation)
+├── src/renderer/        # Arayüz: index.html, scripts/, CSS
+│   ├── scripts/         # file-tree, editor-init, debug-tools, theme-creator, dev-insights...
+│   └── *.css            # Stiller
+├── build/               # İkonlar (icon.svg, icon.png, icon.ico)
+├── scripts/             # Build betikleri (copy-monaco, svg-to-icon, after-pack...)
+├── docs/                # Raporlar (DEBUG-TOOLS-REPORT, DEV-INSIGHTS-HEATMAP...)
+└── SECURITY.md          # Güvenlik detayları
 
 ## 🛡️ Güvenlik ve Şeffaflık
 

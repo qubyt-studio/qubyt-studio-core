@@ -46,8 +46,7 @@ npm run pack    # Paketleme testi (--dir)
 
 ## 🏗️ Proje Yapısı
 
-## 🏗️ Proje Yapısı
-
+```
 ├── main.js              # Electron ana süreç, IPC, pencere yönetimi
 ├── preload.js           # Güvenli IPC köprüsü (context isolation)
 ├── src/renderer/        # Arayüz: index.html, scripts/, CSS
@@ -57,6 +56,7 @@ npm run pack    # Paketleme testi (--dir)
 ├── scripts/             # Build betikleri (copy-monaco, svg-to-icon, after-pack...)
 ├── docs/                # Raporlar (DEBUG-TOOLS-REPORT, DEV-INSIGHTS-HEATMAP...)
 └── SECURITY.md          # Güvenlik detayları
+```
 
 ## 🛡️ Güvenlik ve Şeffaflık
 

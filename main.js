@@ -85,6 +85,7 @@ function createStaticServer() {
     ".html": "text/html",
     ".css": "text/css",
     ".js": "application/javascript",
+    ".mjs": "application/javascript",
     ".json": "application/json",
     ".ico": "image/x-icon",
     ".ttf": "font/ttf",
@@ -277,8 +278,22 @@ ipcMain.on("window-toggle-fullscreen", () => {
   if (w) w.setFullScreen(!w.isFullScreen());
 });
 
-function runApp(port) {
-  createWindow(port);
+function getFolderFromArgv() {
+  for (let i = 1; i < process.argv.length; i++) {
+    const arg = process.argv[i];
+    if (typeof arg !== "string" || arg.startsWith("-")) continue;
+    try {
+      const resolved = path.resolve(normalizePath(arg));
+      if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory())
+        return resolved;
+      if (resolved.length > 2 && /[\\/]/.test(resolved)) return resolved;
+    } catch (_) {}
+  }
+  return null;
+}
+
+function runApp(port, folderFromArgv) {
+  createWindow(port, folderFromArgv || undefined);
 }
 
 app.whenReady().then(() => {
@@ -333,16 +348,30 @@ app.whenReady().then(() => {
       .filter((p) => typeof p === "string" && p.trim())
       .map((p) => path.resolve(normalizePath(p)));
     if (normalized.length === 0) return { error: "Geçerli yol yok." };
-    let common = path.dirname(normalized[0]);
-    for (let i = 1; i < normalized.length; i++) {
-      let dir = path.dirname(normalized[i]);
-      while (dir !== common && !dir.startsWith(common + path.sep)) {
-        const parent = path.dirname(common);
-        if (parent === common) break;
-        common = parent;
+    let rootDir;
+    if (normalized.length === 1) {
+      const p = normalized[0];
+      try {
+        rootDir =
+          fs.existsSync(p) && fs.statSync(p).isDirectory()
+            ? p
+            : path.dirname(p);
+      } catch (_) {
+        rootDir = path.dirname(p);
       }
+    } else {
+      let common = path.dirname(normalized[0]);
+      for (let i = 1; i < normalized.length; i++) {
+        let dir = path.dirname(normalized[i]);
+        while (dir !== common && !dir.startsWith(common + path.sep)) {
+          const parent = path.dirname(common);
+          if (parent === common) break;
+          common = parent;
+        }
+      }
+      rootDir = common;
     }
-    const resolved = path.resolve(common);
+    const resolved = path.resolve(rootDir);
     if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
       return { error: "Klasör bulunamadı." };
     projectRoot = resolved;
@@ -552,6 +581,59 @@ app.whenReady().then(() => {
     const tree = readDirTree(projectRoot, MAX_TREE_DEPTH);
     return { tree };
   });
+
+  const LOG_EXT = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs"]);
+  const CONSOLE_LINE_RE =
+    /^\s*(?:\/\/\s*)?console\.(log|warn|error|debug|info)\s*\(/;
+
+  function collectFiles(dirPath, out) {
+    try {
+      const names = fs.readdirSync(dirPath);
+      for (const name of names) {
+        if (name.startsWith(".")) continue;
+        const full = path.join(dirPath, name);
+        let stat;
+        try {
+          stat = fs.statSync(full);
+        } catch (_) {
+          continue;
+        }
+        if (stat.isDirectory()) {
+          if (SKIP_DIRS.has(name)) continue;
+          collectFiles(full, out);
+        } else if (LOG_EXT.has(path.extname(name).toLowerCase())) {
+          out.push(full);
+        }
+      }
+    } catch (_) {}
+  }
+
+  ipcMain.handle("find-logs", async () => {
+    if (!projectRoot) return { error: "no-project", results: [] };
+    const files = [];
+    collectFiles(projectRoot, files);
+    const results = [];
+    for (const filePath of files) {
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const lines = content.split(/\r?\n/);
+        const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
+        for (let i = 0; i < lines.length; i++) {
+          const m = lines[i].match(CONSOLE_LINE_RE);
+          if (m) {
+            results.push({
+              file: filePath,
+              rel,
+              line: i + 1,
+              content: lines[i].trim(),
+              type: m[1],
+            });
+          }
+        }
+      } catch (_) {}
+    }
+    return { results };
+  });
   ipcMain.handle("create-file", async (e, parentDir, name) => {
     const parent = path.resolve(normalizePath(parentDir));
     if (!projectRoot || !parent.startsWith(projectRoot))
@@ -716,6 +798,72 @@ app.whenReady().then(() => {
         return a.name.localeCompare(b.name);
       });
       return { entries };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+  ipcMain.handle("markdown-parse", async (e, md) => {
+    if (typeof md !== "string") return { error: "invalid" };
+    try {
+      const marked = require("marked");
+      const createDOMPurify = require("dompurify");
+      const { JSDOM } = require("jsdom");
+      const window = new JSDOM("").window;
+      const DOMPurify = createDOMPurify(window);
+      marked.setOptions({ gfm: true, breaks: true });
+      const renderer = new marked.Renderer();
+      const origCode = renderer.code.bind(renderer);
+      renderer.code = function (token) {
+        const langNorm = (token.lang || "").trim().toLowerCase();
+        if (langNorm === "mermaid") {
+          return '<div class="mermaid">' + escapeHtml(token.text) + "</div>";
+        }
+        return origCode(token);
+      };
+      function escapeHtml(s) {
+        return String(s)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+      let raw = marked.parse(md, { renderer });
+      if (raw && typeof raw.then === "function") raw = await raw;
+      if (typeof raw !== "string") return { error: "parse-failed" };
+      const html = DOMPurify.sanitize(raw, {
+        ALLOWED_TAGS: [
+          "h1",
+          "h2",
+          "h3",
+          "h4",
+          "h5",
+          "h6",
+          "p",
+          "br",
+          "hr",
+          "ul",
+          "ol",
+          "li",
+          "strong",
+          "em",
+          "s",
+          "code",
+          "pre",
+          "blockquote",
+          "a",
+          "img",
+          "input",
+          "table",
+          "thead",
+          "tbody",
+          "tr",
+          "th",
+          "td",
+          "div",
+        ],
+        ALLOWED_ATTR: ["href", "src", "alt", "title", "class", "id", "type", "checked", "disabled"],
+      });
+      return { html };
     } catch (err) {
       return { error: err.message };
     }
@@ -947,7 +1095,8 @@ app.whenReady().then(() => {
       createWindow(activePort, resolved);
       return { ok: true };
     });
-    runApp(port);
+    const folderFromArgv = getFolderFromArgv();
+    runApp(port, folderFromArgv);
   });
 });
 

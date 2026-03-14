@@ -1,6 +1,6 @@
 {
   "name": "qubyt-studio",
-  "version": "1.0.6",
+  "version": "1.0.8",
   "description": "Qubyt Studio — modern masaüstü editör (HTML, CSS, JS , TS)",
   "main": "main.js",
   "scripts": {
@@ -95,9 +95,13 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "dompurify": "^3.3.3",
+    "jsdom": "^25.0.1",
     "emmet": "^2.4.11",
     "esbuild": "^0.24.0",
     "eslint": "^8.57.0",
+    "marked": "^17.0.4",
+    "mermaid": "^11.13.0",
     "monaco-editor": "0.48.0"
   },
   "devDependencies": {

@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("editorAPI", {
   writeTemplate: (folderPath, templateId) =>
     ipcRenderer.invoke("write-template", folderPath, templateId),
   getProjectRoot: () => ipcRenderer.invoke("get-project-root"),
+  findLogs: () => ipcRenderer.invoke("find-logs"),
   closeFolder: () => ipcRenderer.invoke("close-folder"),
   openFile: () => ipcRenderer.invoke("open-file"),
   getTree: () => ipcRenderer.invoke("get-tree"),
@@ -73,4 +74,5 @@ contextBridge.exposeInMainWorld("editorAPI", {
   themeDelete: (id) => ipcRenderer.invoke("theme-delete", id),
   themeRename: (id, newName) => ipcRenderer.invoke("theme-rename", id, newName),
   onSplashHide: (fn) => ipcRenderer.on("splash-hide", () => fn()),
+  markdownParse: (md) => ipcRenderer.invoke("markdown-parse", md),
 });

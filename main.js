@@ -582,6 +582,282 @@ app.whenReady().then(() => {
     return { tree };
   });
 
+  async function runMarkupStyleAnalysis() {
+    if (!projectRoot) return { error: "no-project", items: [] };
+    const CSS_CLASS_RE = /\.([a-zA-Z_-][a-zA-Z0-9_-]*)(?:\s|[,>{+~:\[.\(]|$)/g;
+    const HTML_CLASS_RE = /class\s*=\s*["']([^"']*)["']/g;
+    const IMG_NO_ALT_RE = /<img(?![^>]*\balt\s*=)[^>]*>/gi;
+    const CSS_PROP_RE = /([a-zA-Z][a-zA-Z0-9_-]*)\s*:/g;
+    const CSS_EMPTY_RULE_RE = /([^{]+)\{\s*\}/g;
+
+    const VALID_CSS_PROPS = new Set([
+      "color",
+      "background",
+      "background-color",
+      "background-image",
+      "background-repeat",
+      "background-position",
+      "background-size",
+      "margin",
+      "margin-top",
+      "margin-right",
+      "margin-bottom",
+      "margin-left",
+      "padding",
+      "padding-top",
+      "padding-right",
+      "padding-bottom",
+      "padding-left",
+      "border",
+      "border-radius",
+      "border-width",
+      "border-color",
+      "border-style",
+      "box-shadow",
+      "box-sizing",
+      "display",
+      "flex",
+      "flex-direction",
+      "flex-wrap",
+      "flex-grow",
+      "flex-shrink",
+      "align-items",
+      "justify-content",
+      "gap",
+      "width",
+      "height",
+      "min-width",
+      "min-height",
+      "max-width",
+      "max-height",
+      "font-size",
+      "font-weight",
+      "font-family",
+      "line-height",
+      "text-align",
+      "text-decoration",
+      "opacity",
+      "visibility",
+      "position",
+      "top",
+      "right",
+      "bottom",
+      "left",
+      "z-index",
+      "overflow",
+      "overflow-x",
+      "overflow-y",
+      "cursor",
+      "transition",
+      "transform",
+      "object-fit",
+      "list-style",
+      "outline",
+      "resize",
+      "user-select",
+      "pointer-events",
+    ]);
+
+    function collectByExt(dirPath, extSet, out) {
+      try {
+        const names = fs.readdirSync(dirPath);
+        for (const name of names) {
+          if (name.startsWith(".")) continue;
+          const full = path.join(dirPath, name);
+          let stat;
+          try {
+            stat = fs.statSync(full);
+          } catch (_) {
+            continue;
+          }
+          if (stat.isDirectory()) {
+            if (SKIP_DIRS.has(name)) continue;
+            collectByExt(full, extSet, out);
+          } else if (extSet.has(path.extname(name).toLowerCase())) {
+            out.push(full);
+          }
+        }
+      } catch (_) {}
+    }
+
+    function addItem(
+      items,
+      severity,
+      category,
+      message,
+      filePath,
+      line,
+      extra,
+    ) {
+      const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
+      items.push({
+        severity,
+        category,
+        message,
+        file: filePath,
+        rel,
+        line: line || 1,
+        ...extra,
+      });
+    }
+
+    const cssFiles = [];
+    const htmlFiles = [];
+    collectByExt(projectRoot, new Set([".css"]), cssFiles);
+    collectByExt(projectRoot, new Set([".html", ".htm"]), htmlFiles);
+
+    const items = [];
+    const usedClasses = new Set();
+    const definedClasses = new Set();
+
+    for (const filePath of htmlFiles) {
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const lines = content.split(/\r?\n/);
+        const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
+        let m;
+        HTML_CLASS_RE.lastIndex = 0;
+        while ((m = HTML_CLASS_RE.exec(content)) !== null) {
+          const classes = m[1].split(/\s+/).filter(Boolean);
+          classes.forEach((c) => usedClasses.add(c));
+        }
+        for (let i = 0; i < lines.length; i++) {
+          IMG_NO_ALT_RE.lastIndex = 0;
+          if (IMG_NO_ALT_RE.test(lines[i])) {
+            addItem(
+              items,
+              "error",
+              "missing-alt",
+              "<img> eksik alt attribute",
+              filePath,
+              i + 1,
+            );
+          }
+        }
+      } catch (_) {}
+    }
+
+    for (const filePath of cssFiles) {
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const lines = content.split(/\r?\n/);
+        const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
+        let m;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          CSS_CLASS_RE.lastIndex = 0;
+          while ((m = CSS_CLASS_RE.exec(line)) !== null) {
+            definedClasses.add(m[1]);
+          }
+        }
+      } catch (_) {}
+    }
+
+    for (const filePath of htmlFiles) {
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const lines = content.split(/\r?\n/);
+        for (let i = 0; i < lines.length; i++) {
+          HTML_CLASS_RE.lastIndex = 0;
+          let m;
+          while ((m = HTML_CLASS_RE.exec(lines[i])) !== null) {
+            const classes = m[1].split(/\s+/).filter(Boolean);
+            for (const cls of classes) {
+              if (!definedClasses.has(cls)) {
+                addItem(
+                  items,
+                  "warning",
+                  "undefined-class",
+                  "Tanımsız sınıf: ." + cls,
+                  filePath,
+                  i + 1,
+                  { class: cls },
+                );
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    for (const filePath of cssFiles) {
+      try {
+        const content = fs.readFileSync(filePath, "utf-8");
+        const lines = content.split(/\r?\n/);
+        const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
+        let m;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          CSS_CLASS_RE.lastIndex = 0;
+          while ((m = CSS_CLASS_RE.exec(line)) !== null) {
+            const cls = m[1];
+            if (!usedClasses.has(cls)) {
+              addItem(
+                items,
+                "warning",
+                "unused-class",
+                "Kullanılmayan sınıf: ." + cls,
+                filePath,
+                i + 1,
+                { class: cls },
+              );
+            }
+          }
+          CSS_PROP_RE.lastIndex = 0;
+          while ((m = CSS_PROP_RE.exec(line)) !== null) {
+            const prop = m[1];
+            if (
+              !prop.startsWith("-") &&
+              !prop.startsWith("--") &&
+              !VALID_CSS_PROPS.has(prop)
+            ) {
+              addItem(
+                items,
+                "error",
+                "invalid-property",
+                "Geçersiz property: " + prop,
+                filePath,
+                i + 1,
+                { property: prop },
+              );
+            }
+          }
+        }
+        let emptyM;
+        CSS_EMPTY_RULE_RE.lastIndex = 0;
+        while ((emptyM = CSS_EMPTY_RULE_RE.exec(content)) !== null) {
+          const before = content.slice(0, emptyM.index);
+          const lineNum = before.split(/\r?\n/).length;
+          const sel = (emptyM[1] || "")
+            .trim()
+            .replace(/\s+/g, " ")
+            .slice(0, 40);
+          addItem(
+            items,
+            "info",
+            "empty-rule",
+            "Boş kural: " + (sel || "(anon)"),
+            filePath,
+            lineNum,
+            { selector: sel },
+          );
+        }
+      } catch (_) {}
+    }
+
+    return { items };
+  }
+
+  ipcMain.handle("analyze-markup-style", runMarkupStyleAnalysis);
+  ipcMain.handle("analyze-css-usage", async () => {
+    const res = await runMarkupStyleAnalysis();
+    if (res.error) return { error: res.error, unused: [] };
+    const unused = (res.items || [])
+      .filter((i) => i.category === "unused-class")
+      .map((i) => ({ class: i.class, file: i.file, rel: i.rel, line: i.line }));
+    return { unused };
+  });
+
   const LOG_EXT = new Set([".js", ".ts", ".jsx", ".tsx", ".mjs", ".cjs"]);
   const CONSOLE_LINE_RE =
     /^\s*(?:\/\/\s*)?console\.(log|warn|error|debug|info)\s*\(/;
@@ -861,7 +1137,17 @@ app.whenReady().then(() => {
           "td",
           "div",
         ],
-        ALLOWED_ATTR: ["href", "src", "alt", "title", "class", "id", "type", "checked", "disabled"],
+        ALLOWED_ATTR: [
+          "href",
+          "src",
+          "alt",
+          "title",
+          "class",
+          "id",
+          "type",
+          "checked",
+          "disabled",
+        ],
       });
       return { html };
     } catch (err) {
@@ -900,6 +1186,119 @@ app.whenReady().then(() => {
       }
     },
   );
+  /** CodeDiagram Faz 1: AST'tan sınıf/metod modeli çıkar. Sadece parse; kod çalıştırılmaz. */
+  const CODE_DIAGRAM_MAX_BYTES = 512 * 1024; // 500KB
+  ipcMain.handle("code-diagram-parse", async (e, filePath, content) => {
+    if (typeof content !== "string" || !filePath)
+      return { error: "invalid-input" };
+    const ext = path.extname(filePath).toLowerCase();
+    if (ext !== ".js" && ext !== ".mjs" && ext !== ".cjs")
+      return { error: "unsupported-ext", supported: [".js", ".mjs", ".cjs"] };
+    const byteLen = Buffer.byteLength(content, "utf-8");
+    if (byteLen > CODE_DIAGRAM_MAX_BYTES)
+      return { error: "file-too-large", maxBytes: CODE_DIAGRAM_MAX_BYTES };
+    try {
+      const acorn = require("acorn");
+      let ast;
+      try {
+        ast = acorn.parse(content, {
+          ecmaVersion: 2022,
+          sourceType: "module",
+          locations: true,
+        });
+      } catch (moduleErr) {
+        ast = acorn.parse(content, {
+          ecmaVersion: 2022,
+          sourceType: "script",
+          locations: true,
+        });
+      }
+      const classNames = new Set();
+      const classes = [];
+      for (const node of ast.body || []) {
+        if (node.type === "ClassDeclaration" && node.id) {
+          const methods = [];
+          const attributes = [];
+          const body = node.body && node.body.body;
+          if (Array.isArray(body)) {
+            for (const el of body) {
+              if (el.type === "MethodDefinition" && el.key) {
+                const name =
+                  el.key.type === "Identifier"
+                    ? el.key.name
+                    : el.key.type === "PrivateIdentifier"
+                      ? "#" + el.key.name
+                      : null;
+                if (name) methods.push(name);
+              } else if (el.type === "PropertyDefinition" && el.key) {
+                const name =
+                  el.key.type === "Identifier"
+                    ? el.key.name
+                    : el.key.type === "PrivateIdentifier"
+                      ? "#" + el.key.name
+                      : null;
+                if (name) attributes.push(name);
+              }
+            }
+          }
+          const extendsName =
+            node.superClass && node.superClass.type === "Identifier"
+              ? node.superClass.name
+              : null;
+          classNames.add(node.id.name);
+          classes.push({
+            type: "class",
+            name: node.id.name,
+            methods,
+            attributes,
+            extends: extendsName,
+          });
+        }
+      }
+
+      const deps = [];
+      function walk(node, fromClass) {
+        if (!node) return;
+        if (node.type === "NewExpression" && node.callee) {
+          const name =
+            node.callee.type === "Identifier"
+              ? node.callee.name
+              : node.callee.type === "MemberExpression" &&
+                  node.callee.property?.type === "Identifier"
+                ? node.callee.property.name
+                : null;
+          if (name && classNames.has(name) && fromClass && fromClass !== name) {
+            deps.push({ from: fromClass, to: name });
+          }
+        }
+        for (const k of Object.keys(node)) {
+          const v = node[k];
+          if (v && typeof v === "object") {
+            if (Array.isArray(v)) {
+              v.forEach((c) => walk(c, fromClass));
+            } else if (v.type) {
+              walk(v, fromClass);
+            }
+          }
+        }
+      }
+      for (const cls of classes) {
+        const decl = ast.body?.find(
+          (n) =>
+            n.type === "ClassDeclaration" && n.id && n.id.name === cls.name,
+        );
+        if (decl) walk(decl, cls.name);
+      }
+
+      return {
+        diagram: { classes, dependencies: deps },
+        error: null,
+      };
+    } catch (err) {
+      return { error: "parse-error", message: err.message };
+    }
+  });
+
   ipcMain.handle("lint-file", async (e, filePath, content) => {
     if (typeof content !== "string" || !filePath) return { markers: [] };
     const ext = path.extname(filePath).toLowerCase();
@@ -912,7 +1311,13 @@ app.whenReady().then(() => {
         overrideConfig: {
           env: { browser: true, es2022: true, node: true },
           parserOptions: { ecmaVersion: 2022, sourceType: "script" },
-          rules: { "no-undef": "error", "no-unused-vars": "warn" },
+          rules: {
+            "no-undef": "error",
+            "no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+            "no-empty-function": "warn",
+            "no-constant-condition": "warn",
+            "no-unreachable": "warn",
+          },
         },
       });
       const results = await eslint.lintText(content, { filePath });

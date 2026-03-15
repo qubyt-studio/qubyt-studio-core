@@ -1,22 +1,24 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.0.8-blue)
+![Version](https://img.shields.io/badge/version-1.0.9-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Güncel** — Bu README v1.0.8 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
+> ✓ **Güncel** — Bu README v1.0.9 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
 
 Qubyt Studio, web geliştirme için tasarlanmış masaüstü bir kod editörüdür. Monaco editör çekirdeği, Emmet ve ESLint entegrasyonu ile HTML, CSS, JavaScript ve TypeScript için hızlı ve rahat bir geliştirme deneyimi sunar.
 
 ## 🌟 Öne Çıkan Özellikler
 
 - **Monaco Editor:** VS Code'un kalbi olan Monaco ile sözdizimi vurgulama, tamamlama ve snippet desteği.
-- **Desteklenen diller:** HTML, CSS, JavaScript (.js, .mjs, .cjs), TypeScript (.ts, .tsx).
-- **Debug Tools:** Insert Log (Ctrl+Shift+L), Insert Warn/Error/Debug, Remove Logs, Toggle Logs, Find Logs — Turbo Console Log benzeri özellikler.
+- **Desteklenen diller:** HTML, CSS, JavaScript (.js, .mjs, .cjs), TypeScript (.ts, .tsx), Markdown.
+- **Debug Tools:** Insert Log (Ctrl+Shift+L), Insert Warn/Error/Debug, Remove Logs, Toggle Logs, Find Logs.
 - **Tema Oluşturucu:** Kendi editör temanızı oluşturup kaydedebilirsiniz.
-- **Developer Insights:** Kod yazma istatistikleri, dil kullanımı ve aktivite takibi (yerel, gizlilik odaklı).
-- **ESLint entegrasyonu:** JavaScript dosyalarında otomatik lint ve Problems/Warnings panelleri.
+- **Developer Insights:** Kod yazma istatistikleri, dil kullanımı, aktivite heatmap (son 12 hafta).
+- **Markup & Style Analyzer:** HTML/CSS için kullanılmayan sınıf, tanımsız sınıf, eksik alt, geçersiz property (deneysel).
+- **ESLint:** Otomatik lint, genişletilmiş kurallar (boş fonksiyon, unreachable, kullanılmayan parametre), Problems/Warnings.
+- **Sunum modu:** Ctrl+Shift+P ile kod odaklı tam ekran.
 - **Emmet:** HTML ve CSS için hızlı snippet genişletme.
 - **Terminal:** npm, npx, node komutları; yerel sunucu ile tarayıcı önizleme.
 
@@ -63,7 +65,7 @@ npm run pack    # Paketleme testi (--dir)
 Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutuyoruz. Sertifika maliyetleri nedeniyle henüz dijital olarak imzalanmamış olsa da, tüm kod tabanımız şeffaf bir şekilde buradadır.
 
 - **Güvenlik Detayları:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path doğrulama vb.
-- **VirusTotal Raporu:** [Güncel Rapor (v1.0.8)](https://www.virustotal.com/gui/search/qubyt+studio)
+- **VirusTotal Raporu:** [Qubyt Studio.exe (v1.0.9)](https://www.virustotal.com/gui/file/0bb502b40761b0f44ae1c97d381d2acfdb83b142bad1e5a500cf610554a278b2) — SHA-256: `0bb502b4...a278b2`
 
 ## 🛠️ Teknolojiler
 

@@ -478,6 +478,27 @@ app.whenReady().then(() => {
   });
 
   ipcMain.handle("get-project-root", async () => projectRoot);
+  ipcMain.handle("open-external-url", async (e, url) => {
+    if (typeof url !== "string" || !url.startsWith("https://")) return;
+    try {
+      await shell.openExternal(url);
+    } catch (_) {}
+  });
+  ipcMain.handle("preview-debug", async () => {
+    if (!projectRoot) return { projectRoot: null, error: "no-project" };
+    const base = path.resolve(projectRoot);
+    const testPaths = ["style.css", "components.css", "index.html"];
+    const results = {};
+    for (const p of testPaths) {
+      const full = path.join(base, p);
+      const inSample = path.join(base, "sample-multi-css", p);
+      results[p] = {
+        root: fs.existsSync(full),
+        "sample-multi-css/": fs.existsSync(inSample),
+      };
+    }
+    return { projectRoot: base, files: results };
+  });
   ipcMain.handle("close-folder", async () => {
     projectRoot = null;
     return { ok: true };
@@ -588,7 +609,7 @@ app.whenReady().then(() => {
     const HTML_CLASS_RE = /class\s*=\s*["']([^"']*)["']/g;
     const IMG_NO_ALT_RE = /<img(?![^>]*\balt\s*=)[^>]*>/gi;
     const CSS_PROP_RE = /([a-zA-Z][a-zA-Z0-9_-]*)\s*:/g;
-    const CSS_EMPTY_RULE_RE = /([^{]+)\{\s*\}/g;
+    const CSS_EMPTY_RULE_RE = /(?:^|\})\s*([^{]+)\{\s*\}/g;
 
     const VALID_CSS_PROPS = new Set([
       "color",
@@ -609,6 +630,10 @@ app.whenReady().then(() => {
       "padding-bottom",
       "padding-left",
       "border",
+      "border-top",
+      "border-right",
+      "border-bottom",
+      "border-left",
       "border-radius",
       "border-width",
       "border-color",
@@ -624,6 +649,11 @@ app.whenReady().then(() => {
       "align-items",
       "justify-content",
       "gap",
+      "grid",
+      "grid-template-columns",
+      "grid-template-rows",
+      "grid-column",
+      "grid-row",
       "width",
       "height",
       "min-width",
@@ -636,6 +666,8 @@ app.whenReady().then(() => {
       "line-height",
       "text-align",
       "text-decoration",
+      "text-transform",
+      "letter-spacing",
       "opacity",
       "visibility",
       "position",
@@ -653,10 +685,38 @@ app.whenReady().then(() => {
       "object-fit",
       "list-style",
       "outline",
+      "outline-offset",
       "resize",
       "user-select",
       "pointer-events",
+      "content",
+      "vertical-align",
     ]);
+
+    function stripCommentsFromLine(line, inBlockComment) {
+      let out = { line: line, inBlock: inBlockComment };
+      if (inBlockComment) {
+        const end = line.indexOf("*/");
+        if (end >= 0) {
+          out.line = line.slice(end + 2);
+          out.inBlock = false;
+        } else {
+          out.line = "";
+          return out;
+        }
+      }
+      const idx = out.line.indexOf("/*");
+      if (idx >= 0) {
+        const end = out.line.indexOf("*/", idx);
+        if (end >= 0) {
+          out.line = out.line.slice(0, idx) + out.line.slice(end + 2);
+        } else {
+          out.line = out.line.slice(0, idx);
+          out.inBlock = true;
+        }
+      }
+      return out;
+    }
 
     function collectByExt(dirPath, extSet, out) {
       try {
@@ -737,17 +797,24 @@ app.whenReady().then(() => {
       } catch (_) {}
     }
 
+    const DEF_CLASS_RE = /\.([a-zA-Z_-][a-zA-Z0-9_-]*)/g;
     for (const filePath of cssFiles) {
       try {
         const content = fs.readFileSync(filePath, "utf-8");
-        const lines = content.split(/\r?\n/);
-        const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
-        let m;
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          CSS_CLASS_RE.lastIndex = 0;
-          while ((m = CSS_CLASS_RE.exec(line)) !== null) {
-            definedClasses.add(m[1]);
+        const noComments = content.replace(/\/\*[\s\S]*?\*\//g, " ");
+        const selectorBlocks = noComments.match(/[^{]+\{/g) || [];
+        for (const block of selectorBlocks) {
+          const sel = block.replace(/\s*\{$/, "").trim();
+          if (
+            sel.startsWith("@import") ||
+            sel.startsWith("@charset") ||
+            sel.includes("url(")
+          )
+            continue;
+          DEF_CLASS_RE.lastIndex = 0;
+          let m;
+          while ((m = DEF_CLASS_RE.exec(sel)) !== null) {
+            if (m[1] !== "css") definedClasses.add(m[1]);
           }
         }
       } catch (_) {}
@@ -763,6 +830,7 @@ app.whenReady().then(() => {
           while ((m = HTML_CLASS_RE.exec(lines[i])) !== null) {
             const classes = m[1].split(/\s+/).filter(Boolean);
             for (const cls of classes) {
+              if (cls.startsWith("fa-")) continue;
               if (!definedClasses.has(cls)) {
                 addItem(
                   items,
@@ -785,13 +853,24 @@ app.whenReady().then(() => {
         const content = fs.readFileSync(filePath, "utf-8");
         const lines = content.split(/\r?\n/);
         const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
+        let inBlock = false;
         let m;
         for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
+          const { line, inBlock: next } = stripCommentsFromLine(
+            lines[i],
+            inBlock,
+          );
+          inBlock = next;
+          if (!line.trim()) continue;
+          if (
+            line.trimStart().startsWith("@import") ||
+            line.trimStart().startsWith("@charset")
+          )
+            continue;
           CSS_CLASS_RE.lastIndex = 0;
           while ((m = CSS_CLASS_RE.exec(line)) !== null) {
             const cls = m[1];
-            if (!usedClasses.has(cls)) {
+            if (cls !== "css" && !usedClasses.has(cls)) {
               addItem(
                 items,
                 "warning",
@@ -806,6 +885,12 @@ app.whenReady().then(() => {
           CSS_PROP_RE.lastIndex = 0;
           while ((m = CSS_PROP_RE.exec(line)) !== null) {
             const prop = m[1];
+            if (prop.length <= 1) continue;
+            if (prop === "https" || prop === "http") continue;
+            const afterMatch = line[m.index + m[0].length];
+            if (afterMatch === ":") continue;
+            const prev = m.index > 0 ? line[m.index - 1] : " ";
+            if (prev === ".") continue;
             if (
               !prop.startsWith("-") &&
               !prop.startsWith("--") &&
@@ -829,6 +914,7 @@ app.whenReady().then(() => {
           const before = content.slice(0, emptyM.index);
           const lineNum = before.split(/\r?\n/).length;
           const sel = (emptyM[1] || "")
+            .replace(/\/\*[\s\S]*?\*\//g, "")
             .trim()
             .replace(/\s+/g, " ")
             .slice(0, 40);

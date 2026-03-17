@@ -1,11 +1,11 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.3-blue)
+![Version](https://img.shields.io/badge/version-1.1.4-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Güncel** — Bu README v1.1.3 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
+> ✓ **Güncel** — Bu README v1.1.4 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
 
 Qubyt Studio, web geliştirme için tasarlanmış masaüstü bir kod editörüdür. Monaco editör çekirdeği, Emmet ve ESLint entegrasyonu ile HTML, CSS, JavaScript ve TypeScript için hızlı ve rahat bir geliştirme deneyimi sunar.
 
@@ -80,6 +80,7 @@ Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutu
 
 | Sürüm      | Özet                                                                                                                                                                                                     |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1.1.4** | Kaydedilmemiş değişiklik uyarısı (uygulama kapatılırken). Explorer'da ana klasör adı başlıkta. CSS Builder paneli. Live Page ve Markup & Style Analyzer @import desteği. |
 | **v1.1.3** | Project Map sistemi (dosya yapısı, Import Graph, Component Graph). Status bar ve Hakkında penceresinden "Powered by Electron" kaldırıldı.                                                                |
 | **v1.1.2** | Terminal panel tab geçişi düzeltmesi (TERMINAL, PROBLEMS, WARNINGS tab'ları her zaman tıklanabilir).                                                                                                     |
 | **v1.1.0** | Live Page — anlık canlı önizleme; Layout Inspector ile önizlemede elemente tıklayıp stil özelliklerini panelden düzenleme; değişiklikler CSS dosyasına yazılır. Markup & Style Analyzer iyileştirmeleri. |

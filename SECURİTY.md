@@ -1,6 +1,6 @@
 # Güvenlik — Qubyt Studio
 
-> ✓ **Güncel** — Bu belge v1.1.3 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
+> ✓ **Güncel** — Bu belge v1.1.4 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
 
 Bu belge, Qubyt Studio editörünün güvenlik önlemlerini ve sizin yapmanız gerekenleri özetler.
 
@@ -31,4 +31,4 @@ Bir güvenlik açığı fark ederseniz lütfen doğrudan proje sahiplerine (veya
 
 ---
 
-_Son güncelleme: Mart 2026 (v1.1.3)_
+_Son güncelleme: Mart 2026 (v1.1.4)_

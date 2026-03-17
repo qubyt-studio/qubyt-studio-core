@@ -241,6 +241,15 @@ function createWindow(port, folderToOpen) {
     return { action: "deny" };
   });
 
+  win.on("close", (e) => {
+    if (quitAllowed) {
+      quitAllowed = false;
+      return;
+    }
+    e.preventDefault();
+    win.webContents.send("check-unsaved-before-close");
+  });
+
   // Aynı pencerede harici URL'ye gitmeyi engelle — editörde kal, linki sistem tarayıcısında aç
   const localHost = `http://127.0.0.1:${port}`;
   win.webContents.on("will-navigate", (e, url) => {
@@ -257,6 +266,24 @@ ipcMain.on("toggle-devtools", () => {
   const w = require("electron").BrowserWindow.getFocusedWindow();
   if (w) w.webContents.toggleDevTools();
 });
+let quitAllowed = false;
+let pendingQuit = false;
+
+app.on("before-quit", (e) => {
+  if (quitAllowed) {
+    quitAllowed = false;
+    return;
+  }
+  e.preventDefault();
+  const w = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  if (w && !w.isDestroyed()) {
+    pendingQuit = true;
+    w.webContents.send("check-unsaved-before-close");
+  } else {
+    app.exit(0);
+  }
+});
+
 ipcMain.on("app-quit", () => app.quit());
 ipcMain.on("window-minimize", () => {
   const w = require("electron").BrowserWindow.getFocusedWindow();
@@ -269,9 +296,26 @@ ipcMain.on("window-maximize", () => {
 ipcMain.handle("close-current-window", (e) => {
   const w = BrowserWindow.fromWebContents(e.sender);
   if (w && !w.isDestroyed()) {
-    setImmediate(() => w.destroy());
+    w.webContents.send("check-unsaved-before-close");
   }
   return null;
+});
+
+ipcMain.on("close-response", (e, action) => {
+  if (action === "cancel") {
+    pendingQuit = false;
+    return;
+  }
+  const w = BrowserWindow.fromWebContents(e.sender);
+  if (action === "close" && w && !w.isDestroyed()) {
+    if (pendingQuit) {
+      pendingQuit = false;
+      quitAllowed = true;
+      app.quit();
+    } else {
+      w.destroy();
+    }
+  }
 });
 ipcMain.on("window-toggle-fullscreen", () => {
   const w = require("electron").BrowserWindow.getFocusedWindow();

@@ -37,8 +37,7 @@ contextBridge.exposeInMainWorld("editorAPI", {
   getTree: () => ipcRenderer.invoke("get-tree"),
   getProjectMapDependencies: () =>
     ipcRenderer.invoke("project-map-dependencies"),
-  getProjectMapComponents: () =>
-    ipcRenderer.invoke("project-map-components"),
+  getProjectMapComponents: () => ipcRenderer.invoke("project-map-components"),
   readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
   readDirectory: (dirPath) => ipcRenderer.invoke("read-directory", dirPath),
   saveFile: (filePath, content) =>
@@ -80,6 +79,9 @@ contextBridge.exposeInMainWorld("editorAPI", {
   themeDelete: (id) => ipcRenderer.invoke("theme-delete", id),
   themeRename: (id, newName) => ipcRenderer.invoke("theme-rename", id, newName),
   onSplashHide: (fn) => ipcRenderer.on("splash-hide", () => fn()),
+  onCheckUnsavedBeforeClose: (fn) =>
+    ipcRenderer.on("check-unsaved-before-close", () => fn()),
+  sendCloseResponse: (action) => ipcRenderer.send("close-response", action),
   markdownParse: (md) => ipcRenderer.invoke("markdown-parse", md),
   codeDiagramParse: (filePath, content) =>
     ipcRenderer.invoke("code-diagram-parse", filePath, content),

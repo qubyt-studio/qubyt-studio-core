@@ -1,11 +1,11 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.2-blue)
+![Version](https://img.shields.io/badge/version-1.1.3-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Güncel** — Bu README v1.1.2 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
+> ✓ **Güncel** — Bu README v1.1.3 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
 
 Qubyt Studio, web geliştirme için tasarlanmış masaüstü bir kod editörüdür. Monaco editör çekirdeği, Emmet ve ESLint entegrasyonu ile HTML, CSS, JavaScript ve TypeScript için hızlı ve rahat bir geliştirme deneyimi sunar.
 
@@ -66,7 +66,7 @@ npm run pack    # Paketleme testi (--dir)
 Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutuyoruz. Sertifika maliyetleri nedeniyle henüz dijital olarak imzalanmamış olsa da, tüm kod tabanımız şeffaf bir şekilde buradadır.
 
 - **Güvenlik Detayları:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path doğrulama vb.
-- **VirusTotal Raporu:** [Qubyt Studio.exe (v1.1.2)](https://www.virustotal.com/gui/file/0bb502b40761b0f44ae1c97d381d2acfdb83b142bad1e5a500cf610554a278b2) — SHA-256: `0bb502b4...a278b2`
+- **VirusTotal Raporu:** [Qubyt Studio.exe (v1.1.3)](https://www.virustotal.com/gui/file/65ad12bdb53423bcdd3c6d4cb4f668876291d8afe1a02cc7aedf05590f300932) — SHA-256: `65ad12bd...0932`
 
 ## 🛠️ Teknolojiler
 
@@ -75,6 +75,16 @@ Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutu
 - **Emmet** 2.4
 - **ESLint** 8.57
 - **esbuild** 0.24
+
+## 📜 Değişiklik Geçmişi
+
+| Sürüm      | Özet                                                                                                                                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1.1.3** | Project Map sistemi (dosya yapısı, Import Graph, Component Graph). Status bar ve Hakkında penceresinden "Powered by Electron" kaldırıldı.                                                                |
+| **v1.1.2** | Terminal panel tab geçişi düzeltmesi (TERMINAL, PROBLEMS, WARNINGS tab'ları her zaman tıklanabilir).                                                                                                     |
+| **v1.1.0** | Live Page — anlık canlı önizleme; Layout Inspector ile önizlemede elemente tıklayıp stil özelliklerini panelden düzenleme; değişiklikler CSS dosyasına yazılır. Markup & Style Analyzer iyileştirmeleri. |
+| **v1.0.9** | Markup & Style Analyzer, ESLint genişletmesi, Sunum modu (Ctrl+Shift+P), Aktivite heatmap.                                                                                                               |
+| **v1.0.8** | Not Sistemi, Debug Tools, Markdown önizleme (Mermaid, görev listeleri), Developer Insights dashboard.                                                                                                    |
 
 ## 🌐 Ekosistemimiz
 

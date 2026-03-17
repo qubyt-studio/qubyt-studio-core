@@ -1,11 +1,11 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.2-blue)
+![Version](https://img.shields.io/badge/version-1.1.3-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Up to date** — This README reflects the project status as of v1.1.2 (March 2026).
+> ✓ **Up to date** — This README reflects the project status as of v1.1.3 (March 2026).
 
 Qubyt Studio is a desktop code editor designed for web development. With Monaco editor core, Emmet, and ESLint integration, it provides a fast and comfortable development experience for HTML, CSS, JavaScript, and TypeScript.
 
@@ -78,12 +78,13 @@ We prioritize security as an independent project. Although not yet digitally sig
 
 ## 📜 Changelog
 
-| Version | Summary |
-|---------|---------|
-| **v1.1.2** | Terminal panel tab switching fix (TERMINAL, PROBLEMS, WARNINGS tabs always clickable). |
+| Version    | Summary                                                                                                                                                                                    |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **v1.1.3** | Project Map system (file structure, Import Graph, Component Graph). "Powered by Electron" removed from status bar and About window.                                                          |
+| **v1.1.2** | Terminal panel tab switching fix (TERMINAL, PROBLEMS, WARNINGS tabs always clickable).                                                                                                     |
 | **v1.1.0** | Live Page — real-time live preview; Layout Inspector to click elements in preview and edit style properties from panel; changes written to CSS file. Markup & Style Analyzer improvements. |
-| **v1.0.9** | Markup & Style Analyzer, ESLint extension, Presentation mode (Ctrl+Shift+P), Activity heatmap. |
-| **v1.0.8** | Note System, Debug Tools, Markdown preview (Mermaid, task lists), Developer Insights dashboard. |
+| **v1.0.9** | Markup & Style Analyzer, ESLint extension, Presentation mode (Ctrl+Shift+P), Activity heatmap.                                                                                             |
+| **v1.0.8** | Note System, Debug Tools, Markdown preview (Mermaid, task lists), Developer Insights dashboard.                                                                                            |
 
 ## 🌐 Our Ecosystem
 

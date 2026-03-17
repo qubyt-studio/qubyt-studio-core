@@ -603,13 +603,300 @@ app.whenReady().then(() => {
     return { tree };
   });
 
+  /** Project Map Faz 2: Import/dependency graph. Sadece parse; kod çalıştırılmaz. */
+  ipcMain.handle("project-map-dependencies", async () => {
+    if (!projectRoot) return { error: "no-project", nodes: [], edges: [] };
+    const rootNorm = projectRoot.replace(/\\/g, "/").replace(/\/$/, "");
+
+    function collectByExt(dirPath, extSet, out) {
+      try {
+        const names = fs.readdirSync(dirPath);
+        for (const name of names) {
+          if (name.startsWith(".")) continue;
+          const full = path.join(dirPath, name);
+          let stat;
+          try {
+            stat = fs.statSync(full);
+          } catch (_) {
+            continue;
+          }
+          if (stat.isDirectory()) {
+            if (SKIP_DIRS.has(name)) continue;
+            collectByExt(full, extSet, out);
+          } else if (extSet.has(path.extname(name).toLowerCase())) {
+            out.push(full);
+          }
+        }
+      } catch (_) {}
+    }
+
+    function toRel(fullPath) {
+      const p = fullPath.replace(/\\/g, "/");
+      if (p.indexOf(rootNorm) === 0) {
+        return p.slice(rootNorm.length).replace(/^\//, "") || ".";
+      }
+      return fullPath;
+    }
+
+    function resolveFrom(baseDir, spec) {
+      if (!spec || spec.indexOf("://") >= 0) return null;
+      if (!spec.startsWith(".") && !spec.startsWith("/")) return null;
+      const baseNorm = baseDir.replace(/\\/g, "/");
+      let candidate = path
+        .normalize(path.join(baseNorm, spec))
+        .replace(/\\/g, "/");
+      const tries = [
+        candidate,
+        candidate + ".js",
+        candidate + ".mjs",
+        candidate + ".cjs",
+        candidate + "/index.js",
+      ];
+      for (const t of tries) {
+        try {
+          const s = fs.statSync(t);
+          if (s.isFile()) return t;
+        } catch (_) {}
+      }
+      return null;
+    }
+
+    const htmlFiles = [];
+    const jsFiles = [];
+    collectByExt(projectRoot, new Set([".html", ".htm"]), htmlFiles);
+    collectByExt(projectRoot, new Set([".js", ".mjs", ".cjs"]), jsFiles);
+
+    const nodeSet = new Set();
+    const edges = [];
+    const nodeList = [];
+
+    function addNode(rel) {
+      if (!rel || nodeSet.has(rel)) return rel;
+      nodeSet.add(rel);
+      nodeList.push({ id: rel, label: rel });
+      return rel;
+    }
+
+    const SCRIPT_RE = /<script[^>]+src\s*=\s*["']([^"']+)["']/gi;
+    const LINK_RE =
+      /<link[^>]+href\s*=\s*["']([^"']+)["'][^>]*(?:rel\s*=\s*["']stylesheet["']|>)/gi;
+    const LINK_RE2 =
+      /<link[^>]+rel\s*=\s*["']stylesheet["'][^>]+href\s*=\s*["']([^"']+)["']/gi;
+    const IMPORT_RE =
+      /import\s+(?:(?:\{[^}]*\}|\*\s+as\s+\w+|\w+)\s+from\s+)?["']([^'"]+)["']/g;
+    const IMPORT_RE2 = /import\s+["']([^'"]+)["']/g;
+    const REQUIRE_RE = /require\s*\(\s*["']([^'"]+)["']\s*\)/g;
+
+    const processed = new Set();
+    const queue = [];
+
+    for (const htmlPath of htmlFiles) {
+      const htmlDir = path.dirname(htmlPath).replace(/\\/g, "/");
+      let content;
+      try {
+        content = fs.readFileSync(htmlPath, "utf-8");
+      } catch (_) {
+        continue;
+      }
+      const fromRel = addNode(toRel(htmlPath));
+      if (!fromRel) continue;
+
+      let m;
+      SCRIPT_RE.lastIndex = 0;
+      while ((m = SCRIPT_RE.exec(content)) !== null) {
+        const href = m[1].trim().replace(/^\//, "");
+        const resolved = path.join(htmlDir, href).replace(/\\/g, "/");
+        if (
+          resolved.indexOf(rootNorm) === 0 &&
+          fs.existsSync(resolved) &&
+          fs.statSync(resolved).isFile()
+        ) {
+          const toRel2 = addNode(toRel(resolved));
+          if (toRel2) {
+            edges.push({ from: fromRel, to: toRel2 });
+            queue.push(resolved);
+          }
+        }
+      }
+      for (const re of [LINK_RE, LINK_RE2]) {
+        re.lastIndex = 0;
+        while ((m = re.exec(content)) !== null) {
+          const href = m[1].trim().replace(/^\//, "");
+          const resolved = path.join(htmlDir, href).replace(/\\/g, "/");
+          if (
+            resolved.indexOf(rootNorm) === 0 &&
+            fs.existsSync(resolved) &&
+            fs.statSync(resolved).isFile()
+          ) {
+            const toRel2 = addNode(toRel(resolved));
+            if (toRel2) edges.push({ from: fromRel, to: toRel2 });
+          }
+        }
+      }
+    }
+
+    while (queue.length > 0) {
+      const filePath = queue.shift();
+      const key = filePath.replace(/\\/g, "/");
+      if (processed.has(key)) continue;
+      processed.add(key);
+
+      const ext = path.extname(filePath).toLowerCase();
+      if (ext !== ".js" && ext !== ".mjs" && ext !== ".cjs") continue;
+
+      const fromRel = addNode(toRel(filePath));
+      const baseDir = path.dirname(filePath).replace(/\\/g, "/");
+
+      let content;
+      try {
+        content = fs.readFileSync(filePath, "utf-8");
+      } catch (_) {
+        continue;
+      }
+
+      const contentNoComments = content
+        .replace(/\/\*[\s\S]*?\*\//g, " ")
+        .replace(/\/\/[^\n]*/g, " ");
+
+      for (const re of [IMPORT_RE, IMPORT_RE2, REQUIRE_RE]) {
+        re.lastIndex = 0;
+        while ((m = re.exec(contentNoComments)) !== null) {
+          const spec = m[1].trim();
+          const resolved = resolveFrom(baseDir, spec);
+          if (resolved && resolved.indexOf(rootNorm) === 0) {
+            const toRel2 = addNode(toRel(resolved));
+            if (toRel2 && toRel2 !== fromRel) {
+              edges.push({ from: fromRel, to: toRel2 });
+              queue.push(resolved);
+            }
+          }
+        }
+      }
+    }
+
+    return { nodes: nodeList, edges };
+  });
+
+  /** Project Map Faz 3: Component graph. HTML sayfalarının iframe/object/link import ile kullandığı HTML bileşenleri. */
+  ipcMain.handle("project-map-components", async () => {
+    if (!projectRoot) return { error: "no-project", nodes: [], edges: [] };
+    const rootNorm = path
+      .resolve(projectRoot)
+      .replace(/\\/g, "/")
+      .replace(/\/$/, "");
+
+    function collectHtml(dirPath, out) {
+      try {
+        const names = fs.readdirSync(dirPath);
+        for (const name of names) {
+          if (name.startsWith(".")) continue;
+          const full = path.join(dirPath, name);
+          let stat;
+          try {
+            stat = fs.statSync(full);
+          } catch (_) {
+            continue;
+          }
+          if (stat.isDirectory()) {
+            if (SKIP_DIRS.has(name)) continue;
+            collectHtml(full, out);
+          } else if (/\.(html?)$/i.test(name)) {
+            out.push(full);
+          }
+        }
+      } catch (_) {}
+    }
+
+    function toRel(fullPath) {
+      const abs = path.resolve(fullPath).replace(/\\/g, "/");
+      if (abs.toLowerCase().indexOf(rootNorm.toLowerCase()) === 0) {
+        return abs.slice(rootNorm.length).replace(/^\//, "") || ".";
+      }
+      const rel = path.relative(projectRoot, fullPath).replace(/\\/g, "/");
+      return rel.startsWith("..") ? fullPath : rel;
+    }
+
+    const htmlFiles = [];
+    collectHtml(projectRoot, htmlFiles);
+
+    const nodeSet = new Set();
+    const edges = [];
+    const nodeList = [];
+
+    function addNode(rel) {
+      if (!rel || nodeSet.has(rel)) return rel;
+      nodeSet.add(rel);
+      nodeList.push({ id: rel, label: rel });
+      return rel;
+    }
+
+    const IFRAME_RE = /<iframe[^>]*\ssrc\s*=\s*["']([^"']+)["']/gi;
+    const OBJECT_RE = /<object[^>]*\sdata\s*=\s*["']([^"']+)["']/gi;
+    const EMBED_RE = /<embed[^>]*\ssrc\s*=\s*["']([^"']+)["']/gi;
+    const LINK_IMPORT_RE =
+      /<link[^>]+rel\s*=\s*["']import["'][^>]+href\s*=\s*["']([^"']+)["']/gi;
+    const LINK_IMPORT_RE2 =
+      /<link[^>]+href\s*=\s*["']([^"']+)["'][^>]+rel\s*=\s*["']import["']/gi;
+    const SSI_RE =
+      /<!--#include\s+(?:file|virtual)\s*=\s*["']([^"']+)["']\s*-->/gi;
+
+    for (const htmlPath of htmlFiles) {
+      const htmlDir = path.dirname(htmlPath);
+      let content;
+      try {
+        content = fs.readFileSync(htmlPath, "utf-8");
+      } catch (_) {
+        continue;
+      }
+      const fromRel = addNode(toRel(htmlPath));
+      if (!fromRel) continue;
+
+      const patterns = [
+        IFRAME_RE,
+        OBJECT_RE,
+        EMBED_RE,
+        LINK_IMPORT_RE,
+        LINK_IMPORT_RE2,
+        SSI_RE,
+      ];
+
+      for (const re of patterns) {
+        re.lastIndex = 0;
+        let m;
+        while ((m = re.exec(content)) !== null) {
+          const href = m[1].trim().replace(/^\//, "");
+          if (!href || href.indexOf("://") >= 0) continue;
+          const resolved = path.resolve(htmlDir, href).replace(/\\/g, "/");
+          const relCheck = path
+            .relative(projectRoot, resolved)
+            .replace(/\\/g, "/");
+          if (relCheck.startsWith("..") || path.isAbsolute(relCheck)) continue;
+          try {
+            if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile())
+              continue;
+          } catch (_) {
+            continue;
+          }
+          const ext = path.extname(resolved).toLowerCase();
+          if (ext !== ".html" && ext !== ".htm") continue;
+          const toRel2 = addNode(toRel(resolved));
+          if (toRel2 && toRel2 !== fromRel) {
+            edges.push({ from: fromRel, to: toRel2 });
+          }
+        }
+      }
+    }
+
+    return { nodes: nodeList, edges };
+  });
+
   async function runMarkupStyleAnalysis() {
     if (!projectRoot) return { error: "no-project", items: [] };
     const CSS_CLASS_RE = /\.([a-zA-Z_-][a-zA-Z0-9_-]*)(?:\s|[,>{+~:\[.\(]|$)/g;
-    const HTML_CLASS_RE = /class\s*=\s*["']([^"']*)["']/g;
+    const HTML_CLASS_RE = /(?<![a-zA-Z0-9_-])class\s*=\s*["']([^"']*)["']/g;
     const IMG_NO_ALT_RE = /<img(?![^>]*\balt\s*=)[^>]*>/gi;
     const CSS_PROP_RE = /([a-zA-Z][a-zA-Z0-9_-]*)\s*:/g;
-    const CSS_EMPTY_RULE_RE = /(?:^|\})\s*([^{]+)\{\s*\}/g;
+    const CSS_EMPTY_RULE_RE = /([^{}]+)\{\s*\}/g;
 
     const VALID_CSS_PROPS = new Set([
       "color",
@@ -693,6 +980,28 @@ app.whenReady().then(() => {
       "vertical-align",
     ]);
 
+    function getExcludedHtmlRanges(content) {
+      const ranges = [];
+      const re =
+        /<!--[\s\S]*?-->|<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/gi;
+      let m;
+      while ((m = re.exec(content)) !== null) {
+        ranges.push({ start: m.index, end: m.index + m[0].length });
+      }
+      return ranges;
+    }
+
+    function isInRange(index, ranges) {
+      for (const r of ranges) {
+        if (index >= r.start && index < r.end) return true;
+      }
+      return false;
+    }
+
+    function getLineAt(content, index) {
+      return content.slice(0, index).split(/\r?\n/).length;
+    }
+
     function stripCommentsFromLine(line, inBlockComment) {
       let out = { line: line, inBlock: inBlockComment };
       if (inBlockComment) {
@@ -775,9 +1084,11 @@ app.whenReady().then(() => {
         const content = fs.readFileSync(filePath, "utf-8");
         const lines = content.split(/\r?\n/);
         const rel = path.relative(projectRoot, filePath).replace(/\\/g, "/");
+        const excluded = getExcludedHtmlRanges(content);
         let m;
         HTML_CLASS_RE.lastIndex = 0;
         while ((m = HTML_CLASS_RE.exec(content)) !== null) {
+          if (isInRange(m.index, excluded)) continue;
           const classes = m[1].split(/\s+/).filter(Boolean);
           classes.forEach((c) => usedClasses.add(c));
         }
@@ -823,25 +1134,24 @@ app.whenReady().then(() => {
     for (const filePath of htmlFiles) {
       try {
         const content = fs.readFileSync(filePath, "utf-8");
-        const lines = content.split(/\r?\n/);
-        for (let i = 0; i < lines.length; i++) {
-          HTML_CLASS_RE.lastIndex = 0;
-          let m;
-          while ((m = HTML_CLASS_RE.exec(lines[i])) !== null) {
-            const classes = m[1].split(/\s+/).filter(Boolean);
-            for (const cls of classes) {
-              if (cls.startsWith("fa-")) continue;
-              if (!definedClasses.has(cls)) {
-                addItem(
-                  items,
-                  "warning",
-                  "undefined-class",
-                  "Tanımsız sınıf: ." + cls,
-                  filePath,
-                  i + 1,
-                  { class: cls },
-                );
-              }
+        const excluded = getExcludedHtmlRanges(content);
+        HTML_CLASS_RE.lastIndex = 0;
+        let m;
+        while ((m = HTML_CLASS_RE.exec(content)) !== null) {
+          if (isInRange(m.index, excluded)) continue;
+          const classes = m[1].split(/\s+/).filter(Boolean);
+          for (const cls of classes) {
+            if (cls.startsWith("fa-")) continue;
+            if (!definedClasses.has(cls)) {
+              addItem(
+                items,
+                "warning",
+                "undefined-class",
+                "Tanımsız sınıf: ." + cls,
+                filePath,
+                getLineAt(content, m.index),
+                { class: cls },
+              );
             }
           }
         }
@@ -886,11 +1196,13 @@ app.whenReady().then(() => {
           while ((m = CSS_PROP_RE.exec(line)) !== null) {
             const prop = m[1];
             if (prop.length <= 1) continue;
-            if (prop === "https" || prop === "http") continue;
+            if (prop === "https" || prop === "http" || prop === "data")
+              continue;
             const afterMatch = line[m.index + m[0].length];
             if (afterMatch === ":") continue;
             const prev = m.index > 0 ? line[m.index - 1] : " ";
             if (prev === ".") continue;
+            if (prev === "-") continue;
             if (
               !prop.startsWith("-") &&
               !prop.startsWith("--") &&
@@ -918,6 +1230,7 @@ app.whenReady().then(() => {
             .trim()
             .replace(/\s+/g, " ")
             .slice(0, 40);
+          if (!/^[.#@a-zA-Z*\[:]/.test(sel)) continue;
           addItem(
             items,
             "info",

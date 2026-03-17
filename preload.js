@@ -29,10 +29,16 @@ contextBridge.exposeInMainWorld("editorAPI", {
   writeTemplate: (folderPath, templateId) =>
     ipcRenderer.invoke("write-template", folderPath, templateId),
   getProjectRoot: () => ipcRenderer.invoke("get-project-root"),
+  openExternalUrl: (url) => ipcRenderer.invoke("open-external-url", url),
+  previewDebug: () => ipcRenderer.invoke("preview-debug"),
   findLogs: () => ipcRenderer.invoke("find-logs"),
   closeFolder: () => ipcRenderer.invoke("close-folder"),
   openFile: () => ipcRenderer.invoke("open-file"),
   getTree: () => ipcRenderer.invoke("get-tree"),
+  getProjectMapDependencies: () =>
+    ipcRenderer.invoke("project-map-dependencies"),
+  getProjectMapComponents: () =>
+    ipcRenderer.invoke("project-map-components"),
   readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
   readDirectory: (dirPath) => ipcRenderer.invoke("read-directory", dirPath),
   saveFile: (filePath, content) =>
@@ -75,4 +81,8 @@ contextBridge.exposeInMainWorld("editorAPI", {
   themeRename: (id, newName) => ipcRenderer.invoke("theme-rename", id, newName),
   onSplashHide: (fn) => ipcRenderer.on("splash-hide", () => fn()),
   markdownParse: (md) => ipcRenderer.invoke("markdown-parse", md),
+  codeDiagramParse: (filePath, content) =>
+    ipcRenderer.invoke("code-diagram-parse", filePath, content),
+  analyzeCssUsage: () => ipcRenderer.invoke("analyze-css-usage"),
+  analyzeMarkupStyle: () => ipcRenderer.invoke("analyze-markup-style"),
 });

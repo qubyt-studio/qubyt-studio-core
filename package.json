@@ -1,6 +1,6 @@
 {
   "name": "qubyt-studio",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Qubyt Studio — modern masaüstü editör (HTML, CSS, JS , TS)",
   "main": "main.js",
   "scripts": {
@@ -24,6 +24,7 @@
     },
     "files": [
       "main.js",
+      "lsp-server.js",
       "preload.js",
       "build/**/*",
       "src/**/*",
@@ -103,7 +104,11 @@
     "jsdom": "^25.0.1",
     "marked": "^17.0.4",
     "mermaid": "^11.13.0",
-    "monaco-editor": "0.48.0"
+    "monaco-editor": "0.48.0",
+    "typescript": "^5.7.2",
+    "typescript-language-server": "^4.2.0",
+    "vscode-langservers-extracted": "^4.10.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "electron": "^40.6.1",

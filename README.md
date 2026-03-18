@@ -1,7 +1,7 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.4-blue)
+![Version](https://img.shields.io/badge/version-1.1.5-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
@@ -66,7 +66,7 @@ npm run pack    # Paketleme testi (--dir)
 Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutuyoruz. Sertifika maliyetleri nedeniyle henüz dijital olarak imzalanmamış olsa da, tüm kod tabanımız şeffaf bir şekilde buradadır.
 
 - **Güvenlik Detayları:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path doğrulama vb.
-- **VirusTotal Raporu:** [Qubyt Studio.exe (v1.1.3)](https://www.virustotal.com/gui/file/65ad12bdb53423bcdd3c6d4cb4f668876291d8afe1a02cc7aedf05590f300932) — SHA-256: `65ad12bd...0932`
+- **VirusTotal Raporu:** [Qubyt Studio 1.1.5.exe](https://www.virustotal.com/gui/file/bb85d4774fcec6659f9851d317b504c9f537472c14c5d78f6425927e95f81096) — SHA-256: `bb85d477...81096`
 
 ## 🛠️ Teknolojiler
 
@@ -80,6 +80,7 @@ Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutu
 
 | Sürüm      | Özet                                                                                                                                                                                                     |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1.1.5** | LSP Faz 6: JSON Language Server (package.json, tsconfig.json vb.). Error recovery (server çökmesinde otomatik yeniden başlatma). LSP bağlantı düzeltmesi (editor-ready race condition). |
 | **v1.1.4** | Kaydedilmemiş değişiklik uyarısı (uygulama kapatılırken). Explorer'da ana klasör adı başlıkta. CSS Builder paneli. Live Page ve Markup & Style Analyzer @import desteği. |
 | **v1.1.3** | Project Map sistemi (dosya yapısı, Import Graph, Component Graph). Status bar ve Hakkında penceresinden "Powered by Electron" kaldırıldı.                                                                |
 | **v1.1.2** | Terminal panel tab geçişi düzeltmesi (TERMINAL, PROBLEMS, WARNINGS tab'ları her zaman tıklanabilir).                                                                                                     |

@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld("editorAPI", {
     ipcRenderer.invoke("project-map-dependencies"),
   getProjectMapComponents: () => ipcRenderer.invoke("project-map-components"),
   readFile: (filePath) => ipcRenderer.invoke("read-file", filePath),
+  listBuiltinComponents: () => ipcRenderer.invoke("list-builtin-components"),
+  readBuiltinComponent: (relativePath) =>
+    ipcRenderer.invoke("read-builtin-component", relativePath),
   readDirectory: (dirPath) => ipcRenderer.invoke("read-directory", dirPath),
   saveFile: (filePath, content) =>
     ipcRenderer.invoke("save-file", filePath, content),
@@ -87,4 +90,8 @@ contextBridge.exposeInMainWorld("editorAPI", {
     ipcRenderer.invoke("code-diagram-parse", filePath, content),
   analyzeCssUsage: () => ipcRenderer.invoke("analyze-css-usage"),
   analyzeMarkupStyle: () => ipcRenderer.invoke("analyze-markup-style"),
+  /* LSP Faz 1 */
+  lspStart: (projectRoot) => ipcRenderer.invoke("lsp-start", projectRoot),
+  lspStop: () => ipcRenderer.invoke("lsp-stop"),
+  lspStatus: () => ipcRenderer.invoke("lsp-status"),
 });

@@ -11,6 +11,7 @@ const fs = require("fs");
 const http = require("http");
 const { spawn } = require("child_process");
 const esbuild = require("esbuild");
+const lsp = require("./lsp-server");
 
 const SERVER_PORT = 9292;
 const ROOT = __dirname;
@@ -275,7 +276,8 @@ app.on("before-quit", (e) => {
     return;
   }
   e.preventDefault();
-  const w = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
+  const w =
+    BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0];
   if (w && !w.isDestroyed()) {
     pendingQuit = true;
     w.webContents.send("check-unsaved-before-close");
@@ -348,6 +350,7 @@ app.whenReady().then(() => {
     if (result.canceled || !result.filePaths.length) return null;
     projectRoot = path.resolve(normalizePath(result.filePaths[0]));
     const tree = readDirTree(projectRoot, MAX_TREE_DEPTH);
+    lsp.startLspServer(projectRoot);
     return { rootPath: projectRoot, tree };
   });
   ipcMain.handle("pick-folder", async () => {
@@ -381,6 +384,7 @@ app.whenReady().then(() => {
       return { error: "Klasör bulunamadı." };
     projectRoot = resolved;
     const tree = readDirTree(projectRoot, MAX_TREE_DEPTH);
+    lsp.startLspServer(projectRoot);
     return { rootPath: projectRoot, tree };
   });
 
@@ -420,6 +424,7 @@ app.whenReady().then(() => {
       return { error: "Klasör bulunamadı." };
     projectRoot = resolved;
     const tree = readDirTree(projectRoot, MAX_TREE_DEPTH);
+    lsp.startLspServer(projectRoot);
     return { rootPath: projectRoot, tree };
   });
 
@@ -544,9 +549,21 @@ app.whenReady().then(() => {
     return { projectRoot: base, files: results };
   });
   ipcMain.handle("close-folder", async () => {
+    lsp.stopLspServer();
     projectRoot = null;
     return { ok: true };
   });
+
+  /* LSP Faz 1 — TypeScript Language Server */
+  ipcMain.handle("lsp-start", async (e, projectRootPath) => {
+    const result = lsp.startLspServer(projectRootPath || projectRoot);
+    return result;
+  });
+  ipcMain.handle("lsp-stop", async () => {
+    lsp.stopLspServer();
+    return { ok: true };
+  });
+  ipcMain.handle("lsp-status", async () => lsp.getLspStatus());
 
   /* Tema kaydetme / yükleme — userData/themes/ */
   const themesDir = path.join(app.getPath("userData"), "themes");
@@ -1487,6 +1504,77 @@ app.whenReady().then(() => {
           ? "İzin reddedildi. Taşıma başarısız; dosya/klasör kullanımda olabilir."
           : err.message;
       return { error: msg };
+    }
+  });
+  const builtinComponentsDir = path.join(ROOT, "docs", "component-library");
+  ipcMain.handle("list-builtin-components", async () => {
+    try {
+      if (!fs.existsSync(builtinComponentsDir)) return { entries: [] };
+      let manifest = {};
+      const manifestPath = path.join(builtinComponentsDir, "components.json");
+      if (fs.existsSync(manifestPath)) {
+        try {
+          const raw = fs.readFileSync(manifestPath, "utf-8");
+          manifest = JSON.parse(raw);
+        } catch (_) {}
+      }
+      const dirs = fs.readdirSync(builtinComponentsDir);
+      const result = [];
+      for (const dirName of dirs) {
+        const dirPath = path.join(builtinComponentsDir, dirName);
+        if (!fs.statSync(dirPath).isDirectory()) continue;
+        const files = fs.readdirSync(dirPath);
+        for (const f of files) {
+          if (!/\.(html|htm)$/i.test(f)) continue;
+          const relPath = dirName + "/" + f;
+          const fullPath = path.join(dirPath, f);
+          let type = "design";
+          const manifestEntry = manifest[relPath];
+          let typeOverride = null;
+          let description = "";
+          if (manifestEntry) {
+            if (typeof manifestEntry === "object") {
+              if (manifestEntry.type === "script") typeOverride = "script";
+              description = manifestEntry.description || "";
+            } else if (manifestEntry === "script") {
+              typeOverride = "script";
+            }
+          }
+          if (typeOverride === null) {
+            try {
+              const content = fs.readFileSync(fullPath, "utf-8");
+              if (/<script[\s>]/i.test(content)) type = "script";
+            } catch (_) {}
+          } else {
+            type = typeOverride;
+          }
+          result.push({
+            level: dirName,
+            name: f.replace(/\.(html|htm)$/i, ""),
+            path: fullPath,
+            relativePath: relPath,
+            type,
+            description,
+          });
+        }
+      }
+      return { entries: result };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+  ipcMain.handle("read-builtin-component", async (e, relativePath) => {
+    try {
+      const base = path.resolve(builtinComponentsDir);
+      const resolved = path.resolve(
+        builtinComponentsDir,
+        (relativePath || "").replace(/\.\./g, ""),
+      );
+      if (!resolved.startsWith(base)) return { error: "forbidden" };
+      const content = fs.readFileSync(resolved, "utf-8");
+      return { content };
+    } catch (err) {
+      return { error: err.message };
     }
   });
   ipcMain.handle("read-directory", async (e, dirPath) => {

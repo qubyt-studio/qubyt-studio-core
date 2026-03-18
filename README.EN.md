@@ -1,11 +1,11 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.4-blue)
+![Version](https://img.shields.io/badge/version-1.1.5-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Up to date** — This README reflects the project status as of v1.1.4 (March 2026).
+> ✓ **Up to date** — This README reflects the project status as of v1.1.5 (March 2026).
 
 Qubyt Studio is a desktop code editor designed for web development. With Monaco editor core, Emmet, and ESLint integration, it provides a fast and comfortable development experience for HTML, CSS, JavaScript, and TypeScript.
 
@@ -66,7 +66,7 @@ npm run pack    # Packaging test (--dir)
 We prioritize security as an independent project. Although not yet digitally signed due to certificate costs, our entire codebase is transparently available here.
 
 - **Security Details:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path validation, etc.
-- **VirusTotal Report:** [Qubyt Studio.exe (v1.1.2)](https://www.virustotal.com/gui/file/0bb502b40761b0f44ae1c97d381d2acfdb83b142bad1e5a500cf610554a278b2) — SHA-256: `0bb502b4...a278b2`
+- **VirusTotal Report:** [Qubyt Studio 1.1.5.exe](https://www.virustotal.com/gui/file/bb85d4774fcec6659f9851d317b504c9f537472c14c5d78f6425927e95f81096) — SHA-256: `bb85d477...81096`
 
 ## 🛠️ Technologies
 
@@ -80,6 +80,7 @@ We prioritize security as an independent project. Although not yet digitally sig
 
 | Version    | Summary                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **v1.1.5** | LSP Phase 6: JSON Language Server (package.json, tsconfig.json). Error recovery (auto-restart on server crash). LSP connection fix (editor-ready race condition).                           |
 | **v1.1.4** | Unsaved changes warning when closing app. Explorer shows folder name in title. CSS Builder panel. @import support in Live Page and Markup & Style Analyzer.                                |
 | **v1.1.3** | Project Map system (file structure, Import Graph, Component Graph). "Powered by Electron" removed from status bar and About window.                                                        |
 | **v1.1.2** | Terminal panel tab switching fix (TERMINAL, PROBLEMS, WARNINGS tabs always clickable).                                                                                                     |

@@ -80,7 +80,7 @@ Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutu
 
 | Sürüm      | Özet                                                                                                                                                                                                     |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **v1.1.6** | i18n (TR/EN dil desteği). Tab sürükle-bırak ile sıralama. Monaco üst mavi çizgi kaldırma. Explorer'dan editöre dosya sürükle-bırak. |
+| **v1.1.6** | i18n (TR/EN dil desteği). Tab sürükle-bırak ile sıralama. |
 | **v1.1.5** | LSP Faz 6: JSON Language Server (package.json, tsconfig.json vb.). Error recovery (server çökmesinde otomatik yeniden başlatma). LSP bağlantı düzeltmesi (editor-ready race condition). |
 | **v1.1.4** | Kaydedilmemiş değişiklik uyarısı (uygulama kapatılırken). Explorer'da ana klasör adı başlıkta. CSS Builder paneli. Live Page ve Markup & Style Analyzer @import desteği. |
 | **v1.1.3** | Project Map sistemi (dosya yapısı, Import Graph, Component Graph). Status bar ve Hakkında penceresinden "Powered by Electron" kaldırıldı.                                                                |

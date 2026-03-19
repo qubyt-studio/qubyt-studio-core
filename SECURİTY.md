@@ -1,6 +1,6 @@
 # Güvenlik — Qubyt Studio
 
-> ✓ **Güncel** — Bu belge v1.1.5 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
+> ✓ **Güncel** — Bu belge v1.1.6 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
 
 Bu belge, Qubyt Studio editörünün güvenlik önlemlerini ve sizin yapmanız gerekenleri özetler.
 
@@ -27,7 +27,21 @@ Bir güvenlik açığı fark ederseniz lütfen doğrudan proje sahiplerine (veya
 
 ## VirusTotal
 
-v1.1.5 kurulum dosyası (Qubyt Studio 1.1.5.exe) tarandı: [VirusTotal Raporu](https://www.virustotal.com/gui/file/bb85d4774fcec6659f9851d317b504c9f537472c14c5d78f6425927e95f81096) — SHA-256: `bb85d4774fcec6659f9851d317b504c9f537472c14c5d78f6425927e95f81096`
+v1.1.6 kurulum dosyası (Qubyt Studio 1.1.6.exe) tarandı: [VirusTotal Raporu](https://www.virustotal.com/gui/file/3c2b86de75e4b096088188206d331753020e1a5e71964ea3d1b3b41fe2176378/details)
+
+### VirusTotal Details (v1.1.6)
+
+| Özellik          | Değer                                                              |
+| ---------------- | ------------------------------------------------------------------ |
+| **Dosya**        | Qubyt Studio 1.1.6.exe                                             |
+| **Boyut**        | 147.63 MB (154796709 bytes)                                        |
+| **MD5**          | `f64c1460d80628a2df6f40e08f1e45f6`                                 |
+| **SHA-1**        | `c69673c7217ca88a4802fc650dbfc60e23175b13`                         |
+| **SHA-256**      | `3c2b86de75e4b096088188206d331753020e1a5e71964ea3d1b3b41fe2176378` |
+| **Imphash**      | `b34f154ec913d2d2c435cbd644e91687`                                 |
+| **Dosya tipi**   | Win32 EXE (PE32 executable, Nullsoft Installer)                    |
+| **İmza**         | İmzasız (File is not signed)                                       |
+| **İlk gönderim** | 2026-03-19 17:29:58 UTC                                            |
 
 ## Bağımlılıklar
 
@@ -36,4 +50,4 @@ v1.1.5 kurulum dosyası (Qubyt Studio 1.1.5.exe) tarandı: [VirusTotal Raporu](h
 
 ---
 
-_Son güncelleme: Mart 2026 (v1.1.5)_
+_Son güncelleme: Mart 2026 (v1.1.6)_

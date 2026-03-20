@@ -1,11 +1,11 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.6-blue)
+![Version](https://img.shields.io/badge/version-1.1.7-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Güncel** — Bu README v1.1.6 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
+> ✓ **Güncel** — Bu README v1.1.7 (Mart 2026) itibarıyla proje durumunu yansıtmaktadır.
 
 Qubyt Studio, web geliştirme için tasarlanmış masaüstü bir kod editörüdür. Monaco editör çekirdeği, Emmet ve ESLint entegrasyonu ile HTML, CSS, JavaScript ve TypeScript için hızlı ve rahat bir geliştirme deneyimi sunar.
 
@@ -66,7 +66,7 @@ npm run pack    # Paketleme testi (--dir)
 Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutuyoruz. Sertifika maliyetleri nedeniyle henüz dijital olarak imzalanmamış olsa da, tüm kod tabanımız şeffaf bir şekilde buradadır.
 
 - **Güvenlik Detayları:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path doğrulama vb.
-- **VirusTotal Raporu:** [Qubyt Studio 1.1.6.exe](https://www.virustotal.com/gui/file/3c2b86de75e4b096088188206d331753020e1a5e71964ea3d1b3b41fe2176378/details) — SHA-256: `3c2b86de...376378`
+- **VirusTotal Raporu:** [Qubyt Studio 1.1.7.exe](https://www.virustotal.com/gui/file/e42ce8be0f97950429b048b3afe57d5cbbe588a2d5251c28fdb9db76af7ecdbc/details) — SHA-256: `e42ce8be...ecdbc`
 
 ## 🛠️ Teknolojiler
 
@@ -80,9 +80,10 @@ Projemiz bağımsız bir girişim olduğu için güvenliği en üst sırada tutu
 
 | Sürüm      | Özet                                                                                                                                                                                                     |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **v1.1.6** | i18n (TR/EN dil desteği). Tab sürükle-bırak ile sıralama. |
-| **v1.1.5** | LSP Faz 6: JSON Language Server (package.json, tsconfig.json vb.). Error recovery (server çökmesinde otomatik yeniden başlatma). LSP bağlantı düzeltmesi (editor-ready race condition). |
-| **v1.1.4** | Kaydedilmemiş değişiklik uyarısı (uygulama kapatılırken). Explorer'da ana klasör adı başlıkta. CSS Builder paneli. Live Page ve Markup & Style Analyzer @import desteği. |
+| **v1.1.7** | Desteklenen Kütüphaneler — Alpine.js, htmx, Lodash tamamlama ve snippet. x-, @, hx- attribute tamamlamaları; hx-swap/hx-trigger değer önerileri; alpine, htmx, lodash Emmet. |
+| **v1.1.6** | i18n (TR/EN dil desteği). Tab sürükle-bırak ile sıralama. Monaco üst mavi çizgi kaldırma. Explorer'dan editöre dosya sürükle-bırak.                                                                      |
+| **v1.1.5** | LSP Faz 6: JSON Language Server (package.json, tsconfig.json vb.). Error recovery (server çökmesinde otomatik yeniden başlatma). LSP bağlantı düzeltmesi (editor-ready race condition).                  |
+| **v1.1.4** | Kaydedilmemiş değişiklik uyarısı (uygulama kapatılırken). Explorer'da ana klasör adı başlıkta. CSS Builder paneli. Live Page ve Markup & Style Analyzer @import desteği.                                 |
 | **v1.1.3** | Project Map sistemi (dosya yapısı, Import Graph, Component Graph). Status bar ve Hakkında penceresinden "Powered by Electron" kaldırıldı.                                                                |
 | **v1.1.2** | Terminal panel tab geçişi düzeltmesi (TERMINAL, PROBLEMS, WARNINGS tab'ları her zaman tıklanabilir).                                                                                                     |
 | **v1.1.0** | Live Page — anlık canlı önizleme; Layout Inspector ile önizlemede elemente tıklayıp stil özelliklerini panelden düzenleme; değişiklikler CSS dosyasına yazılır. Markup & Style Analyzer iyileştirmeleri. |

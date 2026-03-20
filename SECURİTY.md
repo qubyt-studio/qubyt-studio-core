@@ -1,6 +1,6 @@
 # Güvenlik — Qubyt Studio
 
-> ✓ **Güncel** — Bu belge v1.1.6 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
+> ✓ **Güncel** — Bu belge v1.1.7 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
 
 Bu belge, Qubyt Studio editörünün güvenlik önlemlerini ve sizin yapmanız gerekenleri özetler.
 
@@ -27,21 +27,21 @@ Bir güvenlik açığı fark ederseniz lütfen doğrudan proje sahiplerine (veya
 
 ## VirusTotal
 
-v1.1.6 kurulum dosyası (Qubyt Studio 1.1.6.exe) tarandı: [VirusTotal Raporu](https://www.virustotal.com/gui/file/3c2b86de75e4b096088188206d331753020e1a5e71964ea3d1b3b41fe2176378/details)
+v1.1.7 kurulum dosyası (Qubyt Studio 1.1.7.exe) tarandı: [VirusTotal Raporu](https://www.virustotal.com/gui/file/e42ce8be0f97950429b048b3afe57d5cbbe588a2d5251c28fdb9db76af7ecdbc/details)
 
-### VirusTotal Details (v1.1.6)
+### VirusTotal Details (v1.1.7)
 
 | Özellik          | Değer                                                              |
 | ---------------- | ------------------------------------------------------------------ |
-| **Dosya**        | Qubyt Studio 1.1.6.exe                                             |
-| **Boyut**        | 147.63 MB (154796709 bytes)                                        |
-| **MD5**          | `f64c1460d80628a2df6f40e08f1e45f6`                                 |
-| **SHA-1**        | `c69673c7217ca88a4802fc650dbfc60e23175b13`                         |
-| **SHA-256**      | `3c2b86de75e4b096088188206d331753020e1a5e71964ea3d1b3b41fe2176378` |
+| **Dosya**        | Qubyt Studio 1.1.7.exe                                             |
+| **Boyut**        | 147.63 MB (154801206 bytes)                                        |
+| **MD5**          | `9c67c3d751d6aaef9f6ae1136fa9cb8a`                                 |
+| **SHA-1**        | `f8da3d37221159481062e755a15ffd1ec9cb9000`                         |
+| **SHA-256**      | `e42ce8be0f97950429b048b3afe57d5cbbe588a2d5251c28fdb9db76af7ecdbc` |
 | **Imphash**      | `b34f154ec913d2d2c435cbd644e91687`                                 |
 | **Dosya tipi**   | Win32 EXE (PE32 executable, Nullsoft Installer)                    |
 | **İmza**         | İmzasız (File is not signed)                                       |
-| **İlk gönderim** | 2026-03-19 17:29:58 UTC                                            |
+| **İlk gönderim** | 2026-03-20 22:37:59 UTC                                            |
 
 ## Bağımlılıklar
 
@@ -50,4 +50,4 @@ v1.1.6 kurulum dosyası (Qubyt Studio 1.1.6.exe) tarandı: [VirusTotal Raporu](h
 
 ---
 
-_Son güncelleme: Mart 2026 (v1.1.6)_
+_Son güncelleme: Mart 2026 (v1.1.7)_

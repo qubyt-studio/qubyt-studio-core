@@ -1,11 +1,11 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.7-blue)
+![Version](https://img.shields.io/badge/version-1.1.8-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Up to date** — This README reflects the project status as of v1.1.7 (March 2026).
+> ✓ **Up to date** — This README reflects the project status as of v1.1.8 (March 2026).
 
 Qubyt Studio is a desktop code editor designed for web development. With Monaco editor core, Emmet, and ESLint integration, it provides a fast and comfortable development experience for HTML, CSS, JavaScript, and TypeScript.
 
@@ -66,7 +66,7 @@ npm run pack    # Packaging test (--dir)
 We prioritize security as an independent project. Although not yet digitally signed due to certificate costs, our entire codebase is transparently available here.
 
 - **Security Details:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path validation, etc.
-- **VirusTotal Report:** [Qubyt Studio 1.1.7.exe](https://www.virustotal.com/gui/file/e42ce8be0f97950429b048b3afe57d5cbbe588a2d5251c28fdb9db76af7ecdbc/details) — SHA-256: `e42ce8be...ecdbc`
+- **VirusTotal Report:** [Qubyt Studio 1.1.8.exe](https://www.virustotal.com/gui/file/3347c7e6a78598487db4e0c8d08bd33195041ec30af216fedba25a278b33639c/details) — SHA-256: `3347c7e6...639c`
 
 ## 🛠️ Technologies
 
@@ -80,7 +80,8 @@ We prioritize security as an independent project. Although not yet digitally sig
 
 | Version    | Summary                                                                                                                                                                                    |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **v1.1.7** | Supported Libraries — Alpine.js, htmx, Lodash completion and snippets. x-, @, hx- attribute completions; hx-swap/hx-trigger value suggestions; alpine, htmx, lodash Emmet. |
+| **v1.1.8** | Shoelace attribute completions; Supported Libraries modal (width, typography, “Limits” per card); suppress Qubyt HTML/CDN/path suggestions inside HTML `<style>`; Chart.js (snippets, `Chart.`, example page); `docs/html-embedded-completion-test.html`; starter types and documentation updates. |
+| **v1.1.7** | Supported Libraries — Alpine.js, htmx, Lodash, dayjs, Axios, Chart.js, Shoelace completion and snippets. x-, @, hx- attribute completions; hx-swap/hx-trigger value suggestions; alpine, htmx, lodash, axios, chart, dayjs, shoelace Emmet; HTML &lt;sl-*&gt; tag completions; Chart. (UMD) completions. |
 | **v1.1.6** | i18n (TR/EN language support). Tab drag-and-drop reordering. Monaco top blue line removal. Explorer-to-editor file drag-and-drop.                                                          |
 | **v1.1.5** | LSP Phase 6: JSON Language Server (package.json, tsconfig.json). Error recovery (auto-restart on server crash). LSP connection fix (editor-ready race condition).                          |
 | **v1.1.4** | Unsaved changes warning when closing app. Explorer shows folder name in title. CSS Builder panel. @import support in Live Page and Markup & Style Analyzer.                                |

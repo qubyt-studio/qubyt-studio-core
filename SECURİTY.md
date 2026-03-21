@@ -1,6 +1,6 @@
 # Güvenlik — Qubyt Studio
 
-> ✓ **Güncel** — Bu belge v1.1.7 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
+> ✓ **Güncel** — Bu belge v1.1.8 (Mart 2026) itibarıyla mevcut kod tabanıyla uyumludur.
 
 Bu belge, Qubyt Studio editörünün güvenlik önlemlerini ve sizin yapmanız gerekenleri özetler.
 
@@ -27,21 +27,23 @@ Bir güvenlik açığı fark ederseniz lütfen doğrudan proje sahiplerine (veya
 
 ## VirusTotal
 
-v1.1.7 kurulum dosyası (Qubyt Studio 1.1.7.exe) tarandı: [VirusTotal Raporu](https://www.virustotal.com/gui/file/e42ce8be0f97950429b048b3afe57d5cbbe588a2d5251c28fdb9db76af7ecdbc/details)
+v1.1.8 kurulum dosyası (Qubyt Studio 1.1.8.exe) tarandı: [VirusTotal Raporu](https://www.virustotal.com/gui/file/3347c7e6a78598487db4e0c8d08bd33195041ec30af216fedba25a278b33639c/details)
 
-### VirusTotal Details (v1.1.7)
+### VirusTotal Details (v1.1.8)
 
 | Özellik          | Değer                                                              |
 | ---------------- | ------------------------------------------------------------------ |
-| **Dosya**        | Qubyt Studio 1.1.7.exe                                             |
-| **Boyut**        | 147.63 MB (154801206 bytes)                                        |
-| **MD5**          | `9c67c3d751d6aaef9f6ae1136fa9cb8a`                                 |
-| **SHA-1**        | `f8da3d37221159481062e755a15ffd1ec9cb9000`                         |
-| **SHA-256**      | `e42ce8be0f97950429b048b3afe57d5cbbe588a2d5251c28fdb9db76af7ecdbc` |
+| **Dosya**        | Qubyt Studio 1.1.8.exe                                             |
+| **Boyut**        | 147.64 MB (154810170 bytes)                                        |
+| **MD5**          | `4f17f862ed4fe832afd19865aec8029e`                                 |
+| **SHA-1**        | `86227e69ddd25e5d303504933329e6da45bae607`                         |
+| **SHA-256**      | `3347c7e6a78598487db4e0c8d08bd33195041ec30af216fedba25a278b33639c` |
+| **Authentihash** | `4a517521b27d79fa0bcd71670712187da4678a6ef89f1a392e5f9cb0d283feb0` |
 | **Imphash**      | `b34f154ec913d2d2c435cbd644e91687`                                 |
 | **Dosya tipi**   | Win32 EXE (PE32 executable, Nullsoft Installer)                    |
 | **İmza**         | İmzasız (File is not signed)                                       |
-| **İlk gönderim** | 2026-03-20 22:37:59 UTC                                            |
+| **İlk gönderim** | 2026-03-21 14:53:42 UTC                                            |
+| **Son analiz**   | 2026-03-21 14:53:42 UTC                                            |
 
 ## Bağımlılıklar
 
@@ -50,4 +52,4 @@ v1.1.7 kurulum dosyası (Qubyt Studio 1.1.7.exe) tarandı: [VirusTotal Raporu](h
 
 ---
 
-_Son güncelleme: Mart 2026 (v1.1.7)_
+_Son güncelleme: Mart 2026 (v1.1.8)_

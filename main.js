@@ -7,14 +7,27 @@ const {
   screen,
 } = require("electron");
 const path = require("path");
+const { pathToFileURL, fileURLToPath } = require("url");
 const fs = require("fs");
 const http = require("http");
+const net = require("net");
+const WebSocket = require("ws");
 const { spawn } = require("child_process");
 const esbuild = require("esbuild");
 const lsp = require("./lsp-server");
 
 const SERVER_PORT = 9292;
 const ROOT = __dirname;
+if (process.env.QUBYT_TRACE_NODE_DEBUG === "1") {
+  console.log(
+    "[qubyt] QUBYT_TRACE_NODE_DEBUG=1 — yalnızca ana süreç `debug-node-paused` gönderdiğinde ek satır düşer; uygulama açılışında durak yoksa başka log beklemeyin.",
+  );
+}
+
+/** preload ile aynı: Node inspector IPC varsayılan kapalı; yalnızca bu bayrakta açılır. */
+function qubytNodeInspectorEnabled() {
+  return process.env.QUBYT_ENABLE_NODE_INSPECTOR_UI === "1";
+}
 const SKIP_DIRS = new Set(["node_modules", ".git", ".vscode", "__pycache__"]);
 const MAX_TREE_DEPTH = 8;
 
@@ -28,6 +41,67 @@ function normalizePath(p) {
   )
     return s.slice(4).replace(/\//g, path.sep);
   return s.replace(/\//g, path.sep);
+}
+
+/** Windows: V8 script URL’si sürücü harfini farklı casing ile verebilir; tek URL ile setBreakpointByUrl kaçar. */
+function fileUrlVariantsForDebugger(absPath) {
+  const norm = path.resolve(normalizePath(absPath));
+  const href = pathToFileURL(norm).href;
+  const out = new Set([href]);
+  const m = href.match(/^file:\/\/\/([A-Za-z])(:\/.*)$/);
+  if (m) {
+    const rest = m[2];
+    out.add(`file:///${m[1].toLowerCase()}${rest}`);
+    out.add(`file:///${m[1].toUpperCase()}${rest}`);
+  }
+  return [...out];
+}
+
+function debuggerPathsSameFile(a, b) {
+  const pa = path.resolve(normalizePath(a));
+  const pb = path.resolve(normalizePath(b));
+  if (process.platform === "win32") {
+    return pa.toLowerCase() === pb.toLowerCase();
+  }
+  return pa === pb;
+}
+
+function debuggerUrlToFsPath(u) {
+  if (!u || typeof u !== "string" || !u.startsWith("file:")) return null;
+  try {
+    return path.resolve(normalizePath(fileURLToPath(u)));
+  } catch (_) {
+    return null;
+  }
+}
+
+/** setBreakpointByUrl başarılı olup betik henüz yüklenmemişse locations [] dönebilir; breakpointId yine gelir. */
+function cdpBreakpointAccepted(br) {
+  if (!br || typeof br !== "object") return false;
+  if (br.breakpointId != null && br.breakpointId !== "") return true;
+  if (Array.isArray(br.locations) && br.locations.length > 0) return true;
+  return false;
+}
+
+/** scriptParsed url → dosya yolu tam eşleşmezse (normalize farkı) basename+klasör ile yedek. */
+function scriptIdForResolvedScript(scriptUrlById, resolved) {
+  if (!scriptUrlById || !resolved) return null;
+  const want = path.resolve(normalizePath(resolved));
+  const wantBase = path.basename(want).toLowerCase();
+  const wantDir = path.dirname(want).toLowerCase();
+  for (const [sid, url] of scriptUrlById.entries()) {
+    if (!url || typeof url !== "string") continue;
+    const sp = debuggerUrlToFsPath(url);
+    if (sp && debuggerPathsSameFile(sp, want)) return sid;
+  }
+  for (const [sid, url] of scriptUrlById.entries()) {
+    if (!url || typeof url !== "string") continue;
+    const sp = debuggerUrlToFsPath(url);
+    if (!sp) continue;
+    if (path.basename(sp).toLowerCase() !== wantBase) continue;
+    if (path.dirname(sp).toLowerCase() === wantDir) return sid;
+  }
+  return null;
 }
 
 function readDirTree(dirPath, depth) {
@@ -69,6 +143,471 @@ function readDirTree(dirPath, depth) {
 }
 
 let projectRoot = null;
+
+/** Faz 1 — tek aktif Node debug oturumu (127.0.0.1 inspector + CDP) */
+let nodeDebugSession = null;
+
+/** Düz `node dosya.js` — canlı stdout/stderr (inspector yok); Terminal Çalıştır */
+let nodeLiveRunSession = null;
+
+function disposeNodeLiveRun() {
+  if (!nodeLiveRunSession) return;
+  const sess = nodeLiveRunSession;
+  nodeLiveRunSession = null;
+  try {
+    if (sess.child && !sess.child.killed) sess.child.kill("SIGTERM");
+  } catch (_) {}
+  try {
+    if (sess.sender && !sess.sender.isDestroyed()) {
+      sess.sender.send("run-node-live-ended", {
+        code: null,
+        reason: "replaced",
+      });
+    }
+  } catch (_) {}
+}
+
+function disposeNodeDebugSession() {
+  if (!nodeDebugSession) return;
+  const notifySender = nodeDebugSession.sender;
+  try {
+    if (nodeDebugSession.pauseUiFallbackTimer) {
+      clearTimeout(nodeDebugSession.pauseUiFallbackTimer);
+      nodeDebugSession.pauseUiFallbackTimer = null;
+    }
+  } catch (_) {}
+  try {
+    if (nodeDebugSession.resumeUiTimer) {
+      clearTimeout(nodeDebugSession.resumeUiTimer);
+      nodeDebugSession.resumeUiTimer = null;
+    }
+  } catch (_) {}
+  try {
+    const pend = nodeDebugSession.cdpPending;
+    if (pend && pend.size) {
+      for (const [, p] of pend) {
+        try {
+          clearTimeout(p.timeout);
+        } catch (_) {}
+      }
+      pend.clear();
+    }
+  } catch (_) {}
+  try {
+    if (nodeDebugSession.ws) {
+      nodeDebugSession.ws.removeAllListeners("message");
+      nodeDebugSession.ws.removeAllListeners("error");
+      nodeDebugSession.ws.removeAllListeners("open");
+      if (
+        nodeDebugSession.ws.readyState === WebSocket.OPEN ||
+        nodeDebugSession.ws.readyState === WebSocket.CONNECTING
+      ) {
+        nodeDebugSession.ws.close();
+      }
+    }
+  } catch (_) {}
+  try {
+    if (nodeDebugSession.child && !nodeDebugSession.child.killed) {
+      nodeDebugSession.child.kill("SIGTERM");
+    }
+  } catch (_) {}
+  nodeDebugSession = null;
+  try {
+    if (notifySender && !notifySender.isDestroyed()) {
+      notifySender.send("debug-node-resumed");
+    }
+  } catch (_) {}
+}
+
+/** Faz 4 — Debugger.paused: dosya+satır; call stack + kapsam değişkenleri (Runtime.getProperties). */
+function buildMinimalNodePausedPayload(params, scriptUrlById) {
+  const frames = params && params.callFrames;
+  if (!frames || !frames.length) return null;
+  /* Duraklat / iç çerçeve: üst kare node:internal olabilir; kullanıcı dosyası altta kalır. */
+  for (let fi = 0; fi < frames.length; fi++) {
+    const fr = frames[fi];
+    const loc = fr && fr.location;
+    if (!loc) continue;
+    let url = loc.url;
+    if ((!url || url === "") && loc.scriptId) {
+      url = scriptUrlById.get(loc.scriptId);
+    }
+    if (!url || typeof url !== "string" || !url.startsWith("file:")) continue;
+    let fsPath;
+    try {
+      fsPath = path.resolve(normalizePath(fileURLToPath(url)));
+    } catch (_) {
+      continue;
+    }
+    const line = (loc.lineNumber ?? 0) + 1;
+    return {
+      filePath: fsPath,
+      line,
+      reason: (params && params.reason) || "",
+    };
+  }
+  return null;
+}
+
+function sessionScriptPathForPausedFallback() {
+  return nodeDebugSession && nodeDebugSession.filePath
+    ? String(nodeDebugSession.filePath)
+    : "";
+}
+
+/** callFrames boş veya eşleşmeyen durak — yine de DEBUG’e bir şey gönder.
+ *  opts.steppingDisabled: VM gerçekten durmuyorsa true — renderer Adım/Devam açmasın (CDP hatası önlenir). */
+function sendSyntheticPausedPayload(sender, params, reasonTag, opts) {
+  if (!sender || sender.isDestroyed()) return;
+  const fp = sessionScriptPathForPausedFallback();
+  const base = fp ? path.basename(fp) : "?";
+  const steppingDisabled = !!(opts && opts.steppingDisabled);
+  sendDebugNodePausedToRenderer(sender, {
+    filePath: fp,
+    line: 0,
+    reason:
+      ((params && params.reason) || "") + (reasonTag ? ` ${reasonTag}` : ""),
+    callStack: [
+      {
+        functionName: steppingDisabled ? "(önizleme — VM boşta)" : "(pause)",
+        file: base,
+        line: 0,
+        filePath: fp,
+      },
+    ],
+    variables: [],
+    steppingDisabled,
+  });
+}
+
+function buildNodeDebugCallStackFromPausedParams(params, scriptUrlById) {
+  const frames = params && params.callFrames;
+  if (!frames || !frames.length) return [];
+  const callStack = [];
+  for (let i = 0; i < frames.length; i++) {
+    const fr = frames[i];
+    const fn = fr.functionName || "(anonymous)";
+    const loc2 = fr.location;
+    if (!loc2) continue;
+    let url = loc2.url;
+    if ((!url || url === "") && loc2.scriptId) {
+      url = scriptUrlById.get(loc2.scriptId);
+    }
+    let filePath = "";
+    let file = "?";
+    if (url && typeof url === "string" && url.startsWith("file:")) {
+      try {
+        filePath = path.resolve(normalizePath(fileURLToPath(url)));
+        file = path.basename(filePath);
+      } catch (_) {}
+    } else if (url && typeof url === "string") {
+      file = url.length > 48 ? `${url.slice(0, 45)}…` : url;
+    }
+    const line = (loc2.lineNumber ?? 0) + 1;
+    callStack.push({ functionName: fn, file, line, filePath });
+  }
+  return callStack;
+}
+
+function sendDebugNodePausedToRenderer(sender, payload) {
+  try {
+    if (!sender || sender.isDestroyed()) return;
+    if (nodeDebugSession && nodeDebugSession.sender === sender) {
+      nodeDebugSession.pauseReportedToRenderer = true;
+      nodeDebugSession.syntheticPauseActive = !!(
+        payload && payload.steppingDisabled === true
+      );
+    }
+    if (process.env.QUBYT_TRACE_NODE_DEBUG === "1") {
+      const nStack =
+        payload && payload.callStack ? payload.callStack.length : 0;
+      const nVar = payload && payload.variables ? payload.variables.length : 0;
+      console.log(
+        "[qubyt] IPC debug-node-paused",
+        payload && payload.filePath,
+        payload && payload.line,
+        "stack=" + nStack,
+        "vars=" + nVar,
+      );
+    }
+    sender.send("debug-node-paused", payload);
+  } catch (_) {}
+}
+
+/** enrich başarısız / timeout: yine de çağrı yığını + satır gönder (DEBUG paneli boş kalmasın). */
+function sendFallbackDebugNodePaused(sender, params, scriptUrlById) {
+  if (!sender || sender.isDestroyed()) return;
+  const frames = params && params.callFrames;
+  if (!frames || !frames.length) {
+    sendSyntheticPausedPayload(sender, params, "(no-call-frames)");
+    return;
+  }
+  const callStack = buildNodeDebugCallStackFromPausedParams(
+    params,
+    scriptUrlById,
+  );
+  const min = buildMinimalNodePausedPayload(params, scriptUrlById);
+  const top = frames[0];
+  const line = min
+    ? min.line
+    : top && top.location
+      ? (top.location.lineNumber ?? 0) + 1
+      : 0;
+  let filePath = min ? min.filePath : "";
+  if (!filePath) filePath = sessionScriptPathForPausedFallback();
+  sendDebugNodePausedToRenderer(sender, {
+    filePath,
+    line,
+    reason: (params && params.reason) || "",
+    callStack,
+    variables: [],
+  });
+}
+
+/** CDP Runtime.consoleAPICalled → tek satır (inspect altında stdout bazen gecikir/kaçırılır). */
+function formatRuntimeConsoleApiCalledLine(params) {
+  if (!params) return "";
+  const args = params.args || [];
+  const parts = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (!a) continue;
+    const t = a.type || "";
+    if (t === "string" && a.value != null) parts.push(a.value);
+    else if (
+      (t === "number" ||
+        t === "boolean" ||
+        t === "bigint" ||
+        t === "undefined") &&
+      Object.prototype.hasOwnProperty.call(a, "value")
+    ) {
+      parts.push(String(a.value));
+    } else if (a.subtype === "null") {
+      parts.push("null");
+    } else if (a.description) {
+      parts.push(a.description);
+    } else {
+      parts.push("(" + (t || "?") + ")");
+    }
+  }
+  return parts.join(" ");
+}
+
+async function enrichAndSendNodePaused(params, sender, scriptUrlById, cdpSend) {
+  const frames = params && params.callFrames;
+  if (!frames || !frames.length) {
+    sendSyntheticPausedPayload(sender, params, "(no-call-frames)");
+    return;
+  }
+  if (!sender || sender.isDestroyed()) return;
+
+  const minimal = buildMinimalNodePausedPayload(params, scriptUrlById);
+
+  const callStack = buildNodeDebugCallStackFromPausedParams(
+    params,
+    scriptUrlById,
+  );
+
+  const variables = [];
+  const MAX_VARS = 56;
+  const MAX_PER_SCOPE = 28;
+  const MAX_GLOBAL = 16;
+  const top = frames[0];
+  const scopeChain = top.scopeChain || [];
+
+  for (let s = 0; s < scopeChain.length && variables.length < MAX_VARS; s++) {
+    const scope = scopeChain[s];
+    if (!scope || !scope.object || !scope.object.objectId) continue;
+    const scopeType = scope.type || "scope";
+    const cap =
+      scopeType === "global" || scopeType === "module"
+        ? MAX_GLOBAL
+        : MAX_PER_SCOPE;
+    try {
+      const gp = await cdpSend("Runtime.getProperties", {
+        objectId: scope.object.objectId,
+        ownProperties: true,
+        generatePreview: true,
+      });
+      const result = (gp && gp.result) || [];
+      let n = 0;
+      for (
+        let j = 0;
+        j < result.length && n < cap && variables.length < MAX_VARS;
+        j++
+      ) {
+        const p = result[j];
+        if (!p || !p.name || /^__/.test(p.name)) continue;
+        const val = p.value;
+        let preview = "";
+        let vtype = "undefined";
+        if (val) {
+          vtype = val.type || "?";
+          if (vtype === "string") {
+            preview =
+              val.value != null ? JSON.stringify(String(val.value)) : '""';
+          } else if (vtype === "number" || vtype === "boolean") {
+            preview = String(val.value);
+          } else if (vtype === "bigint") {
+            preview = String(val.value);
+          } else if (vtype === "object" && val.subtype === "null") {
+            preview = "null";
+          } else if (
+            vtype === "object" &&
+            val.preview &&
+            val.preview.description
+          ) {
+            preview = val.preview.description;
+          } else if (val.description) {
+            preview = val.description;
+          } else {
+            preview = vtype;
+          }
+        } else if (p.get && p.get.objectId) {
+          preview = "(…)";
+          vtype = "accessor";
+        } else {
+          continue;
+        }
+        if (preview.length > 220) preview = `${preview.slice(0, 217)}…`;
+        variables.push({
+          scope: scopeType,
+          name: p.name,
+          type: vtype,
+          preview,
+        });
+        n++;
+      }
+    } catch (_) {
+      /* bir kapsam atlanır */
+    }
+  }
+
+  let filePath = minimal ? minimal.filePath : "";
+  if (!filePath) filePath = sessionScriptPathForPausedFallback();
+  const payload = {
+    filePath,
+    line: minimal
+      ? minimal.line
+      : top && top.location
+        ? (top.location.lineNumber ?? 0) + 1
+        : 0,
+    reason: (params && params.reason) || "",
+    callStack,
+    variables,
+  };
+  sendDebugNodePausedToRenderer(sender, payload);
+}
+
+/** Aktif Node debug oturumunda tek bir CDP komutu (Faz 3: pause / step / resume). */
+async function nodeDebugCdpCommand(method, params) {
+  if (
+    !nodeDebugSession ||
+    !nodeDebugSession.ws ||
+    nodeDebugSession.ws.readyState !== WebSocket.OPEN ||
+    typeof nodeDebugSession.cdpSend !== "function"
+  ) {
+    return { error: "no-session" };
+  }
+  /* Duraklat yedeği: DEBUG’te önizleme var ama VM durmamış — Adım CDP hatası vermesin. */
+  if (nodeDebugSession.syntheticPauseActive) {
+    if (method === "Debugger.resume") {
+      nodeDebugSession.syntheticPauseActive = false;
+      try {
+        const snd = nodeDebugSession.sender;
+        if (snd && !snd.isDestroyed()) {
+          snd.send("debug-node-resumed");
+        }
+      } catch (_) {}
+      return { ok: true, info: "synthetic-cleared" };
+    }
+    if (
+      method === "Debugger.stepOver" ||
+      method === "Debugger.stepInto" ||
+      method === "Debugger.stepOut"
+    ) {
+      return { error: "synthetic-pause-no-vm" };
+    }
+  }
+  try {
+    await nodeDebugSession.cdpSend(
+      method,
+      params && typeof params === "object" ? params : {},
+    );
+    return { ok: true };
+  } catch (err) {
+    const msg = err && err.message ? String(err.message) : "";
+    /* Resume yalnızca duraktayken; betik zaten akıyorsa aynı CDP metni gelir — adımdan ayır. */
+    if (
+      method === "Debugger.resume" &&
+      (/can only perform operation while paused/i.test(msg) ||
+        /while paused/i.test(msg))
+    ) {
+      return { info: "resume-not-paused" };
+    }
+    return { error: err.message || String(method) + "-failed" };
+  }
+}
+
+function findFreePortLocalhost() {
+  return new Promise((resolve, reject) => {
+    const s = net.createServer();
+    s.unref();
+    s.on("error", reject);
+    s.listen(0, "127.0.0.1", () => {
+      const addr = s.address();
+      const p = addr && addr.port;
+      s.close((err) => {
+        if (err) reject(err);
+        else resolve(p);
+      });
+    });
+  });
+}
+
+function httpGetJsonLocal(urlStr) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(urlStr, (res) => {
+      let body = "";
+      res.on("data", (c) => {
+        body += c;
+      });
+      res.on("end", () => {
+        if (res.statusCode !== 200) {
+          reject(new Error("HTTP " + res.statusCode));
+          return;
+        }
+        try {
+          resolve(JSON.parse(body));
+        } catch (e) {
+          reject(e);
+        }
+      });
+    });
+    req.on("error", reject);
+    req.setTimeout(2000, () => {
+      req.destroy();
+      reject(new Error("timeout"));
+    });
+  });
+}
+
+async function waitForNodeInspectorWsUrl(port, deadlineMs) {
+  const url = `http://127.0.0.1:${port}/json/list`;
+  while (Date.now() < deadlineMs) {
+    try {
+      const list = await httpGetJsonLocal(url);
+      if (Array.isArray(list) && list.length > 0) {
+        const wsUrl = list[0].webSocketDebuggerUrl;
+        if (wsUrl) return wsUrl;
+      }
+    } catch (_) {
+      /* Inspector henüz dinlemiyor */
+    }
+    await new Promise((r) => setTimeout(r, 60));
+  }
+  throw new Error("inspector-ready-timeout");
+}
 
 function tryListen(server, port, cb) {
   server
@@ -196,9 +735,12 @@ function createStaticServer() {
 
 let server = null;
 let activePort = SERVER_PORT;
+/** tryListen bazen (özellikle Windows) listening callback'ini iki kez tetikleyebilir; IPC çift kayıt hatasını önler. */
+let staticServerIpcRegistered = false;
 
 function createWindow(port, folderToOpen) {
-  const iconPath = path.join(ROOT, "build", "icon.png");
+  const { resolvePngForWindow } = require("./scripts/icon-paths");
+  const iconPath = resolvePngForWindow();
   const primary = screen.getPrimaryDisplay();
   const { x, y, width, height } = primary.workArea;
   const win = new BrowserWindow({
@@ -212,7 +754,7 @@ function createWindow(port, folderToOpen) {
     show: false,
     frame: false,
     titleBarStyle: "hidden",
-    icon: iconPath,
+    ...(iconPath && fs.existsSync(iconPath) ? { icon: iconPath } : {}),
     webPreferences: {
       preload: path.join(ROOT, "preload.js"),
       contextIsolation: true,
@@ -438,12 +980,22 @@ app.whenReady().then(() => {
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Yeni Sayfa</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <h1>Merhaba</h1>
+  <script src="script.js" defer></script>
 </body>
 </html>
 `,
+      },
+      {
+        name: "style.css",
+        content: `/* Minimal başlangıç */\nbody { margin: 0; font-family: system-ui, sans-serif; }\n`,
+      },
+      {
+        name: "script.js",
+        content: `// İsteğe bağlı betik\n`,
       },
     ],
     "html5-css-js": [
@@ -505,26 +1057,103 @@ app.whenReady().then(() => {
       },
     ],
   };
-  ipcMain.handle("write-template", async (e, folderPath, templateId) => {
-    const dir = path.resolve(normalizePath(folderPath));
-    const files = TEMPLATES[templateId];
-    if (!files || !Array.isArray(files)) return { error: "Bilinmeyen şablon." };
-    try {
-      if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory())
-        return { error: "Hedef klasör bulunamadı." };
-      const written = [];
-      for (const f of files) {
-        const full = path.join(dir, f.name);
-        if (fs.existsSync(full))
-          return { error: `${f.name} zaten mevcut. Farklı bir klasör seçin.` };
-        fs.writeFileSync(full, f.content, "utf-8");
-        written.push(full);
+  const _cdnLib = require("./template-definitions.js");
+  const _exampleLib = require("./library-example-definitions.js");
+  const _miniProjects = require("./mini-project-templates.js");
+  Object.assign(
+    TEMPLATES,
+    _cdnLib.templates,
+    _exampleLib.templates,
+    _miniProjects.templates,
+  );
+  /** Çekirdek üç şablon: proje kökünde components/<şablon>/ (diğer bileşen düzeni ile uyumlu). */
+  const CORE_TEMPLATE_SUBDIRS = {
+    "html5-empty": path.join("components", "html5-empty"),
+    "html5-css-js": path.join("components", "html5-css-js"),
+    "single-page": path.join("components", "single-page"),
+    "mini-todo-vanilla": "mini-todo-vanilla",
+    "mini-api-fetch": "mini-api-fetch",
+    "mini-dashboard-skeleton": "mini-dashboard-skeleton",
+  };
+  const TEMPLATE_SUBDIRS = Object.assign(
+    {},
+    _cdnLib.subdirs || {},
+    _exampleLib.subdirs || {},
+    CORE_TEMPLATE_SUBDIRS,
+  );
+
+  ipcMain.handle(
+    "write-template",
+    async (e, folderPath, templateId, entryFileName) => {
+      const dir = path.resolve(normalizePath(folderPath));
+      const files = TEMPLATES[templateId];
+      if (!files || !Array.isArray(files))
+        return { error: "Bilinmeyen şablon." };
+      const sub = TEMPLATE_SUBDIRS[templateId];
+      try {
+        if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory())
+          return { error: "Hedef klasör bulunamadı." };
+        let baseDir = dir;
+        if (sub) {
+          const subPath = path.join(dir, sub);
+          if (fs.existsSync(subPath)) {
+            const st = fs.statSync(subPath);
+            if (!st.isDirectory())
+              return {
+                error: `'${sub}' bir dosya; aynı ada klasör oluşturulamıyor.`,
+              };
+            let entries;
+            try {
+              entries = fs.readdirSync(subPath);
+            } catch (e) {
+              return { error: e.message || "Klasör okunamadı." };
+            }
+            if (entries.length > 0)
+              return {
+                error: `'${sub}' klasörü boş değil. Boş klasör silin veya farklı hedef seçin.`,
+              };
+          } else {
+            fs.mkdirSync(subPath, { recursive: true });
+          }
+          baseDir = subPath;
+        }
+        const written = [];
+        for (const f of files) {
+          const full = path.join(baseDir, f.name);
+          const parent = path.dirname(full);
+          if (!fs.existsSync(parent)) fs.mkdirSync(parent, { recursive: true });
+          if (fs.existsSync(full))
+            return {
+              error: `${f.name} zaten mevcut. Farklı bir klasör veya boş alt klasör seçin.`,
+            };
+          fs.writeFileSync(full, f.content, "utf-8");
+          written.push(full);
+        }
+        let entryBase = "index.html";
+        if (typeof entryFileName === "string" && entryFileName.trim()) {
+          const base = path.basename(entryFileName.replace(/\\/g, "/"));
+          if (base && !base.includes("..")) entryBase = base;
+        }
+        let hasEntryFile = files.some((f) => f && f.name === entryBase);
+        if (!hasEntryFile) {
+          entryBase = "index.html";
+          hasEntryFile = files.some((f) => f && f.name === entryBase);
+        }
+        if (!hasEntryFile) {
+          const firstHtml = files.find(
+            (f) => f && typeof f.name === "string" && /\.html?$/i.test(f.name),
+          );
+          if (firstHtml) entryBase = firstHtml.name;
+        }
+        const entryRelative = sub
+          ? sub.replace(/\\/g, "/") + "/" + entryBase
+          : entryBase;
+        return { ok: true, path: dir, files: written, entryRelative };
+      } catch (err) {
+        return { error: err.message || "Yazma hatası." };
       }
-      return { ok: true, path: dir, files: written };
-    } catch (err) {
-      return { error: err.message || "Yazma hatası." };
-    }
-  });
+    },
+  );
 
   ipcMain.handle("get-project-root", async () => projectRoot);
   ipcMain.handle("open-external-url", async (e, url) => {
@@ -549,6 +1178,7 @@ app.whenReady().then(() => {
     return { projectRoot: base, files: results };
   });
   ipcMain.handle("close-folder", async () => {
+    disposeNodeDebugSession();
     lsp.stopLspServer();
     projectRoot = null;
     return { ok: true };
@@ -1532,10 +2162,31 @@ app.whenReady().then(() => {
           const manifestEntry = manifest[relPath];
           let typeOverride = null;
           let description = "";
+          let descriptionEn = "";
+          let displayName = "";
+          let detailFactKey = "";
+          let levelScore = null;
+          let scriptCatalogGroup = "";
           if (manifestEntry) {
             if (typeof manifestEntry === "object") {
               if (manifestEntry.type === "script") typeOverride = "script";
               description = manifestEntry.description || "";
+              descriptionEn =
+                manifestEntry.descriptionEn ||
+                manifestEntry.description_en ||
+                "";
+              displayName = String(manifestEntry.displayName || "").trim();
+              detailFactKey = String(manifestEntry.detailFactKey || "").trim();
+              const rawScore = manifestEntry.levelScore;
+              if (typeof rawScore === "number" && !Number.isNaN(rawScore)) {
+                levelScore = rawScore;
+              } else if (rawScore != null && rawScore !== "") {
+                const n = Number(rawScore);
+                if (!Number.isNaN(n)) levelScore = n;
+              }
+              scriptCatalogGroup = String(
+                manifestEntry.scriptCatalogGroup || "",
+              ).trim();
             } else if (manifestEntry === "script") {
               typeOverride = "script";
             }
@@ -1548,13 +2199,19 @@ app.whenReady().then(() => {
           } else {
             type = typeOverride;
           }
+          const baseName = f.replace(/\.(html|htm)$/i, "");
           result.push({
             level: dirName,
-            name: f.replace(/\.(html|htm)$/i, ""),
+            name: baseName,
+            displayName: displayName || baseName,
             path: fullPath,
             relativePath: relPath,
             type,
             description,
+            descriptionEn,
+            detailFactKey,
+            levelScore,
+            scriptCatalogGroup,
           });
         }
       }
@@ -1577,6 +2234,236 @@ app.whenReady().then(() => {
       return { error: err.message };
     }
   });
+
+  /** Bileşen galerisini aynı pencerede açar; opts örn. { scrollToCategory: "buttons" } */
+  ipcMain.handle("open-component-gallery", async (event, opts) => {
+    const payload =
+      opts && typeof opts === "object" && !Array.isArray(opts) ? opts : {};
+    try {
+      event.sender.send("open-component-gallery", payload);
+    } catch (_) {}
+    return { ok: true };
+  });
+
+  const patternBlocksRoot = path.join(ROOT, "blocks");
+  const patternBlocksRootResolved = path.resolve(patternBlocksRoot);
+
+  function resolvePatternBlockDir(dirName) {
+    const seg = String(dirName || "").trim();
+    if (!/^[a-z0-9][a-z0-9-]*$/i.test(seg)) return null;
+    const full = path.resolve(patternBlocksRoot, seg);
+    const rel = path.relative(patternBlocksRootResolved, full);
+    if (!rel || rel.startsWith("..") || path.isAbsolute(rel)) return null;
+    return full;
+  }
+
+  function readPatternBlocksIndex() {
+    const idxPath = path.join(patternBlocksRoot, "index.json");
+    if (!fs.existsSync(idxPath)) return [];
+    try {
+      const raw = fs.readFileSync(idxPath, "utf-8");
+      const j = JSON.parse(raw);
+      if (!j || !Array.isArray(j.blocks)) return [];
+      return j.blocks;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function resolveContentFileForLocale(blockDirAbs, rel, uiLang) {
+    const safeRel = String(rel)
+      .replace(/\.\./g, "")
+      .replace(/^[/\\]+/, "");
+    const fp = path.resolve(blockDirAbs, safeRel);
+    const relToBlock = path.relative(blockDirAbs, fp);
+    if (
+      !relToBlock ||
+      relToBlock.startsWith("..") ||
+      path.isAbsolute(relToBlock)
+    )
+      return { error: "invalid_content_path" };
+    if (uiLang === "en") {
+      const ext = path.extname(safeRel);
+      if (ext) {
+        const base = safeRel.slice(0, -ext.length);
+        const enRel = `${base}.en${ext}`;
+        const enFp = path.resolve(blockDirAbs, enRel);
+        const enRelTo = path.relative(blockDirAbs, enFp);
+        if (
+          enRelTo &&
+          !enRelTo.startsWith("..") &&
+          !path.isAbsolute(enRelTo) &&
+          fs.existsSync(enFp)
+        ) {
+          return { path: enFp };
+        }
+      }
+    }
+    if (!fs.existsSync(fp)) return { error: "missing_content_file" };
+    return { path: fp };
+  }
+
+  function resolvePatternInsertions(blockDirAbs, insertions, uiLang) {
+    const lang = uiLang === "en" ? "en" : "tr";
+    const out = [];
+    for (const ins of insertions || []) {
+      if (!ins || ins.type !== "html-fragment") continue;
+      let text = "";
+      if (typeof ins.content === "string") text = ins.content;
+      else if (ins.contentFile) {
+        const safeRel = String(ins.contentFile)
+          .replace(/\.\./g, "")
+          .replace(/^[/\\]+/, "");
+        const resolved = resolveContentFileForLocale(
+          blockDirAbs,
+          ins.contentFile,
+          lang,
+        );
+        if (resolved.error) return { error: resolved.error };
+        text = fs.readFileSync(resolved.path, "utf-8");
+        if (!String(text).trim() && safeRel) {
+          const defaultFp = path.resolve(blockDirAbs, safeRel);
+          const relToBlock = path.relative(blockDirAbs, defaultFp);
+          if (
+            relToBlock &&
+            !relToBlock.startsWith("..") &&
+            !path.isAbsolute(relToBlock) &&
+            fs.existsSync(defaultFp)
+          ) {
+            const fallback = fs.readFileSync(defaultFp, "utf-8");
+            if (String(fallback).trim()) text = fallback;
+          }
+        }
+      } else return { error: "insertion_needs_content" };
+      if (!String(text).trim()) continue;
+      out.push({
+        type: ins.type,
+        target: ins.target,
+        content: text,
+      });
+    }
+    if (out.length === 0) return { error: "no_valid_insertions" };
+    return { insertions: out };
+  }
+
+  ipcMain.handle("list-pattern-blocks", async () => {
+    try {
+      if (!fs.existsSync(patternBlocksRoot)) return { blocks: [] };
+      const entries = readPatternBlocksIndex();
+      const blocks = [];
+      for (const ent of entries) {
+        const id = ent && ent.id;
+        const dir = ent && ent.dir;
+        if (!id || !dir) continue;
+        const blockDirAbs = resolvePatternBlockDir(dir);
+        if (!blockDirAbs) continue;
+        const manifestPath = path.join(blockDirAbs, "block.json");
+        if (!fs.existsSync(manifestPath)) continue;
+        let manifest;
+        try {
+          manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+        } catch (_) {
+          continue;
+        }
+        if (!manifest || manifest.id !== id) continue;
+        blocks.push({
+          id: manifest.id,
+          version: manifest.version,
+          title: manifest.title || {},
+          description: manifest.description || {},
+          tags: Array.isArray(manifest.tags) ? manifest.tags : [],
+          category: manifest.category || "other",
+          dependencies: Array.isArray(manifest.dependencies)
+            ? manifest.dependencies
+            : [],
+          learningNotesKey: manifest.learningNotesKey || "",
+        });
+      }
+      return { blocks };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle("get-pattern-block", async (e, blockId, uiLang) => {
+    try {
+      const id = String(blockId || "").trim();
+      if (!id) return { error: "missing_id" };
+      const lang = uiLang === "en" ? "en" : "tr";
+      const entries = readPatternBlocksIndex();
+      const ent = entries.find((x) => x && x.id === id);
+      if (!ent || !ent.dir) return { error: "not_found" };
+      const blockDirAbs = resolvePatternBlockDir(ent.dir);
+      if (!blockDirAbs) return { error: "not_found" };
+      const manifestPath = path.join(blockDirAbs, "block.json");
+      if (!fs.existsSync(manifestPath)) return { error: "not_found" };
+      let manifest;
+      try {
+        manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+      } catch (err) {
+        return { error: err.message };
+      }
+      if (!manifest || manifest.id !== id) return { error: "not_found" };
+      const ins = Array.isArray(manifest.insertions) ? manifest.insertions : [];
+      const resolved = resolvePatternInsertions(blockDirAbs, ins, lang);
+      if (resolved.error) return { error: resolved.error };
+      const outlineKeys = Array.isArray(manifest.learningOutlineKeys)
+        ? manifest.learningOutlineKeys.filter(
+            (k) => typeof k === "string" && k.trim(),
+          )
+        : [];
+      const docRefs = Array.isArray(manifest.docRefs)
+        ? manifest.docRefs.filter(
+            (r) =>
+              r &&
+              typeof r.relPath === "string" &&
+              r.relPath.trim() &&
+              typeof r.labelKey === "string" &&
+              r.labelKey.trim(),
+          )
+        : [];
+      return {
+        block: {
+          id: manifest.id,
+          version: manifest.version,
+          title: manifest.title || {},
+          description: manifest.description || {},
+          tags: Array.isArray(manifest.tags) ? manifest.tags : [],
+          category: manifest.category || "other",
+          dependencies: Array.isArray(manifest.dependencies)
+            ? manifest.dependencies
+            : [],
+          learningNotesKey: manifest.learningNotesKey || "",
+          learningOutlineKeys: outlineKeys,
+          docRefs,
+          insertions: resolved.insertions,
+        },
+      };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
+  ipcMain.handle("read-bundled-doc", async (e, relPath) => {
+    try {
+      const raw = String(relPath || "")
+        .trim()
+        .replace(/\\/g, "/");
+      if (!raw || raw.includes("..")) return { error: "invalid_path" };
+      if (!/^docs\/(?:[\w-]+\/)*[\w.-]+\.(?:md|txt)$/i.test(raw))
+        return { error: "invalid_path" };
+      const full = path.resolve(path.join(__dirname, raw));
+      const root = path.resolve(__dirname);
+      if (!full.startsWith(root + path.sep)) return { error: "invalid_path" };
+      if (!fs.existsSync(full) || !fs.statSync(full).isFile())
+        return { error: "not_found" };
+      const content = fs.readFileSync(full, "utf-8");
+      return { path: full, content };
+    } catch (err) {
+      return { error: err.message };
+    }
+  });
+
   ipcMain.handle("read-directory", async (e, dirPath) => {
     const resolved = path.resolve(normalizePath(dirPath));
     if (!projectRoot || !resolved.startsWith(projectRoot))
@@ -1943,6 +2830,513 @@ app.whenReady().then(() => {
     });
   });
 
+  /**
+   * Düz Node çalıştırma — inspector yok; stdout/stderr anında renderer’a (`run-node-live-stream`).
+   * Terminal Çalıştır bu yolu kullanır (canlı `console.log`).
+   */
+  ipcMain.handle("run-node-live", async (e, filePath) => {
+    if (!projectRoot || typeof filePath !== "string" || !filePath.trim()) {
+      return { error: "no-project" };
+    }
+    disposeNodeLiveRun();
+    disposeNodeDebugSession();
+
+    const resolved = path.resolve(normalizePath(filePath.trim()));
+    if (!resolved.startsWith(projectRoot)) return { error: "forbidden" };
+    const ext = path.extname(resolved).toLowerCase();
+    if (ext !== ".js" && ext !== ".mjs" && ext !== ".cjs") {
+      return { error: "not-js" };
+    }
+    if (!fs.existsSync(resolved)) return { error: "not-found" };
+
+    const sender = e.sender;
+    const forwardStream = (stream, chunk) => {
+      try {
+        if (sender && !sender.isDestroyed()) {
+          sender.send("run-node-live-stream", { stream, chunk });
+        }
+      } catch (_) {}
+    };
+
+    const child = spawn("node", [resolved], {
+      cwd: projectRoot,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    nodeLiveRunSession = { child, sender };
+
+    child.stderr.on("data", (d) => forwardStream("stderr", d.toString()));
+    child.stdout.on("data", (d) => forwardStream("stdout", d.toString()));
+    child.on("close", (code) => {
+      if (!nodeLiveRunSession || nodeLiveRunSession.child !== child) return;
+      const endSender = nodeLiveRunSession.sender;
+      nodeLiveRunSession = null;
+      try {
+        if (endSender && !endSender.isDestroyed()) {
+          endSender.send("run-node-live-ended", {
+            code: code == null ? null : code,
+          });
+        }
+      } catch (_) {}
+    });
+    child.on("error", (err) => {
+      if (!nodeLiveRunSession || nodeLiveRunSession.child !== child) return;
+      const endSender = nodeLiveRunSession.sender;
+      nodeLiveRunSession = null;
+      try {
+        if (endSender && !endSender.isDestroyed()) {
+          endSender.send("run-node-live-ended", {
+            code: null,
+            error: err.message || "spawn-failed",
+          });
+        }
+      } catch (_) {}
+    });
+
+    return { ok: true, pid: child.pid, filePath: resolved };
+  });
+
+  /**
+   * Debugger Faz 1–2: inspect-brk, CDP, setBreakpointByUrl, Debugger.paused/resumed olayları.
+   */
+  ipcMain.handle("debug-node-start", async (e, filePath, opts) => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { error: "inspector-disabled" };
+    }
+    if (!projectRoot || typeof filePath !== "string" || !filePath.trim()) {
+      return { error: "no-project" };
+    }
+    disposeNodeLiveRun();
+    disposeNodeDebugSession();
+
+    const o = opts && typeof opts === "object" ? opts : {};
+    const breakpointLinesRaw = Array.isArray(o.breakpointLines)
+      ? o.breakpointLines
+      : [];
+    const breakpointLines = [
+      ...new Set(
+        breakpointLinesRaw
+          .map((n) => parseInt(n, 10))
+          .filter((n) => Number.isFinite(n) && n > 0),
+      ),
+    ].sort((a, b) => a - b);
+
+    const resolved = path.resolve(normalizePath(filePath.trim()));
+    const rootNorm = path.resolve(normalizePath(projectRoot));
+    const relToRoot = path.relative(rootNorm, resolved);
+    if (
+      relToRoot.startsWith("..") ||
+      (path.isAbsolute(relToRoot) && process.platform === "win32")
+    ) {
+      return { error: "debug-outside-project" };
+    }
+    const ext = path.extname(resolved).toLowerCase();
+    if (ext !== ".js" && ext !== ".mjs" && ext !== ".cjs") {
+      return { error: "not-js" };
+    }
+    if (!fs.existsSync(resolved)) return { error: "not-found" };
+
+    let port;
+    try {
+      port = await findFreePortLocalhost();
+    } catch (err) {
+      return { error: err.message || "no-port" };
+    }
+
+    const sender = e.sender;
+    const forwardStream = (stream, chunk) => {
+      try {
+        if (sender && !sender.isDestroyed()) {
+          sender.send("debug-node-stream", { stream, chunk });
+        }
+      } catch (_) {}
+    };
+
+    const scriptUrlById = new Map();
+    const cdpPending = new Map();
+    let cdpNextId = 0;
+
+    const child = spawn("node", [`--inspect-brk=127.0.0.1:${port}`, resolved], {
+      cwd: projectRoot,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: { ...process.env },
+    });
+
+    /* close: stdio kapandıktan sonra (Windows’ta exit ile stdout’un sonu kesilebiliyordu). */
+    child.on("close", (code) => {
+      if (nodeDebugSession && nodeDebugSession.child === child) {
+        const endSender = nodeDebugSession.sender;
+        try {
+          if (endSender && !endSender.isDestroyed()) {
+            endSender.send("debug-node-session-ended", {
+              code: code == null ? null : code,
+            });
+          }
+        } catch (_) {}
+        disposeNodeDebugSession();
+      }
+    });
+
+    let stderrBuf = "";
+    child.stderr.on("data", (d) => {
+      const t = d.toString();
+      stderrBuf += t;
+      forwardStream("stderr", t);
+    });
+    child.stdout.on("data", (d) => forwardStream("stdout", d.toString()));
+
+    let ws = null;
+    /* inspect-brk ilk duraklaması hemen Debugger.resume ile kalkıyor; bu paused'ı UI'a göndermeyiz
+     * (aksi halde DEBUG dolar, ardından resumed ile silinir — breakpoint duraklaması kaçırılmış gibi görünür). */
+    let forwardDebuggerPausedToRenderer = false;
+
+    function cdpSend(method, params) {
+      const id = ++cdpNextId;
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          cdpPending.delete(id);
+          reject(new Error("cdp-timeout: " + method));
+        }, 25000);
+        cdpPending.set(id, { resolve, reject, timeout });
+        ws.send(JSON.stringify({ id, method, params: params || {} }));
+      });
+    }
+
+    try {
+      const wsUrl = await waitForNodeInspectorWsUrl(port, Date.now() + 12000);
+      ws = new WebSocket(wsUrl);
+      await new Promise((resolve, reject) => {
+        const t = setTimeout(() => reject(new Error("ws-open-timeout")), 10000);
+        ws.once("open", () => {
+          clearTimeout(t);
+          resolve();
+        });
+        ws.once("error", (err) => {
+          clearTimeout(t);
+          reject(err);
+        });
+      });
+
+      ws.on("message", (raw) => {
+        let msg;
+        try {
+          msg = JSON.parse(raw.toString());
+        } catch (_) {
+          return;
+        }
+        if (msg.method === "Debugger.scriptParsed") {
+          const p = msg.params;
+          if (p && p.scriptId && p.url) scriptUrlById.set(p.scriptId, p.url);
+          return;
+        }
+        if (msg.method === "Runtime.consoleAPICalled") {
+          try {
+            const line = formatRuntimeConsoleApiCalledLine(msg.params);
+            if (line) forwardStream("stdout", line + "\n");
+          } catch (_) {}
+          return;
+        }
+        if (msg.method === "Debugger.paused") {
+          if (!forwardDebuggerPausedToRenderer) {
+            return;
+          }
+          if (nodeDebugSession && nodeDebugSession.sender === sender) {
+            if (nodeDebugSession.resumeUiTimer) {
+              clearTimeout(nodeDebugSession.resumeUiTimer);
+              nodeDebugSession.resumeUiTimer = null;
+            }
+            nodeDebugSession.pauseGeneration =
+              (nodeDebugSession.pauseGeneration || 0) + 1;
+          }
+          if (nodeDebugSession && nodeDebugSession.pauseUiFallbackTimer) {
+            clearTimeout(nodeDebugSession.pauseUiFallbackTimer);
+            nodeDebugSession.pauseUiFallbackTimer = null;
+          }
+          void enrichAndSendNodePaused(
+            msg.params,
+            sender,
+            scriptUrlById,
+            cdpSend,
+          ).catch(() => {
+            sendFallbackDebugNodePaused(sender, msg.params, scriptUrlById);
+          });
+          return;
+        }
+        if (msg.method === "Debugger.resumed") {
+          try {
+            const sess = nodeDebugSession;
+            /* inspect-brk sonrası Node birden fazla `resumed` üretebiliyor; ilki kullanıcı duraklamasından
+             * önce bile `debug-node-paused` sonrası gecikmeli gelip DEBUG’i siliyordu. Yalnızca en az bir
+             * `debug-node-paused` gönderildikten sonra resumed ilet. */
+            if (
+              !sess ||
+              sess.sender !== sender ||
+              !sess.pauseReportedToRenderer
+            ) {
+              return;
+            }
+            /* Adım (step) sırasında: resumed hemen ardından yeni Debugger.paused gelir. Gecikmiş veya
+             * sıra dışı bir resumed, yeni durak verisi renderer’a ulaştıktan sonra debug-node-resumed
+             * gönderip DEBUG sekmesini ve yığını boşaltıyordu. pauseGeneration + kısa debounce: yeni
+             * paused gelince zamanlayıcı iptal; yalnızca “gerçekten çalışmaya devam” kısmında IPC gider. */
+            if (sess.resumeUiTimer) {
+              clearTimeout(sess.resumeUiTimer);
+              sess.resumeUiTimer = null;
+            }
+            const genAtResume = sess.pauseGeneration || 0;
+            sess.resumeUiTimer = setTimeout(() => {
+              sess.resumeUiTimer = null;
+              if (!nodeDebugSession || nodeDebugSession !== sess) return;
+              if ((sess.pauseGeneration || 0) !== genAtResume) return;
+              if (sess.sender && !sess.sender.isDestroyed()) {
+                sess.sender.send("debug-node-resumed");
+              }
+            }, 40);
+          } catch (_) {}
+          return;
+        }
+        if (msg.id != null && cdpPending.has(msg.id)) {
+          const p = cdpPending.get(msg.id);
+          clearTimeout(p.timeout);
+          cdpPending.delete(msg.id);
+          if (msg.error) {
+            p.reject(new Error(msg.error.message || JSON.stringify(msg.error)));
+          } else {
+            p.resolve(msg.result);
+          }
+        }
+      });
+
+      await cdpSend("Runtime.enable", {});
+      await cdpSend("Debugger.enable", {});
+
+      const fileHrefVariants = fileUrlVariantsForDebugger(resolved);
+      const baseRx = path
+        .basename(resolved)
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const urlRegexFallback = `.*[/\\\\]${baseRx}$`;
+      /** CDP’de gerçekten kayıtlı satırlar (istenen glyph sayısından az olabilir — yol/url uyuşmazlığı). */
+      const boundBreakpointLines = new Set();
+
+      for (const lineOneBased of breakpointLines) {
+        let placed = false;
+        for (let vi = 0; vi < fileHrefVariants.length && !placed; vi++) {
+          try {
+            const br = await cdpSend("Debugger.setBreakpointByUrl", {
+              url: fileHrefVariants[vi],
+              lineNumber: lineOneBased - 1,
+              columnNumber: 0,
+            });
+            if (cdpBreakpointAccepted(br)) {
+              placed = true;
+              boundBreakpointLines.add(lineOneBased);
+            }
+          } catch (_) {
+            /* denenecek diğer URL veya urlRegex */
+          }
+        }
+        if (!placed) {
+          try {
+            const brx = await cdpSend("Debugger.setBreakpointByUrl", {
+              urlRegex: urlRegexFallback,
+              lineNumber: lineOneBased - 1,
+              columnNumber: 0,
+            });
+            if (cdpBreakpointAccepted(brx)) {
+              placed = true;
+              boundBreakpointLines.add(lineOneBased);
+            }
+          } catch (_) {}
+        }
+      }
+
+      /* inspect-brk: kullanıcı betiği scriptParsed ile gelene kadar bekle; scriptId + satır en güvenilir. */
+      async function applyBreakpointsWhenScriptIdKnown() {
+        const maxMs = 3200;
+        const step = 30;
+        let waited = 0;
+        while (waited <= maxMs && breakpointLines.length > 0) {
+          const sid = scriptIdForResolvedScript(scriptUrlById, resolved);
+          if (sid) {
+            for (const lineOneBased of breakpointLines) {
+              try {
+                await cdpSend("Debugger.setBreakpoint", {
+                  location: {
+                    scriptId: sid,
+                    lineNumber: lineOneBased - 1,
+                    columnNumber: 0,
+                  },
+                });
+                boundBreakpointLines.add(lineOneBased);
+              } catch (_) {}
+            }
+            return;
+          }
+          await new Promise((r) => setTimeout(r, step));
+          waited += step;
+        }
+      }
+      if (breakpointLines.length > 0) {
+        await applyBreakpointsWhenScriptIdKnown();
+      }
+
+      /* inspect-brk ilk Debugger.paused zaten yukarıda flag=false ile düşürüldü.
+       * Kısa betiklerde `debugger;` veya hemen tetiklenen breakpoint, Resume CDP *yanıtı*
+       * gelmeden önce ikinci Debugger.paused olarak gelebilir; bayrağı yalnızca finally'de
+       * açmak bu duraklamayı yanlışlıkla yutardı (DEBUG boş kalırdı). */
+      forwardDebuggerPausedToRenderer = true;
+
+      nodeDebugSession = {
+        child,
+        ws,
+        port,
+        filePath: resolved,
+        cdpPending,
+        scriptUrlById,
+        cdpSend,
+        sender,
+        startedAt: Date.now(),
+        pauseReportedToRenderer: false,
+        pauseGeneration: 0,
+        resumeUiTimer: null,
+        syntheticPauseActive: false,
+      };
+
+      /* inspect-brk genelde ilk satırda duraklar; nadiren bağlantı gecikmesiyle VM
+       * zaten çalışıyorsa Debugger.resume CDP hatası verir — oturumu yine kur. */
+      try {
+        await cdpSend("Debugger.resume", {});
+      } catch (resumeErr) {
+        const rmsg =
+          resumeErr && resumeErr.message ? String(resumeErr.message) : "";
+        if (
+          !/can only perform operation while paused/i.test(rmsg) &&
+          !/while paused/i.test(rmsg)
+        ) {
+          throw resumeErr;
+        }
+      }
+
+      return {
+        ok: true,
+        port,
+        pid: child.pid,
+        filePath: resolved,
+        breakpointsApplied: breakpointLines.length,
+        breakpointsBound: boundBreakpointLines.size,
+        message:
+          breakpointLines.length > 0
+            ? boundBreakpointLines.size > 0
+              ? "Inspector bağlı; breakpoint(ler) CDP’ye bağlandı. Durunca DEBUG + terminal + satır vurgusu."
+              : "Inspector bağlı; glyph satırları CDP’ye bağlanamadı (yol eşleşmesi?). `debugger;` veya satırı kontrol edin."
+            : "Inspector bağlı; betik çalışıyor (breakpoint yok).",
+      };
+    } catch (err) {
+      try {
+        if (nodeDebugSession && nodeDebugSession.child === child) {
+          disposeNodeDebugSession();
+        } else {
+          for (const [, p] of cdpPending) clearTimeout(p.timeout);
+          cdpPending.clear();
+          if (ws) ws.close();
+          if (child && !child.killed) child.kill("SIGTERM");
+        }
+      } catch (_) {}
+      return {
+        error: err.message || "debug-start-failed",
+        stderr: stderrBuf.trim().slice(0, 4000),
+      };
+    }
+  });
+
+  ipcMain.handle("debug-node-stop", async () => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { error: "inspector-disabled" };
+    }
+    disposeNodeDebugSession();
+    return { ok: true };
+  });
+
+  ipcMain.handle("debug-node-continue", async () => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { error: "inspector-disabled" };
+    }
+    return nodeDebugCdpCommand("Debugger.resume", {});
+  });
+
+  ipcMain.handle("debug-node-pause", async () => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { error: "inspector-disabled" };
+    }
+    const r = await nodeDebugCdpCommand("Debugger.pause", {});
+    if (r.error) return r;
+    const sess = nodeDebugSession;
+    if (!sess || !sess.sender || sess.sender.isDestroyed()) return r;
+    /* Betik senkron kısmı bitmiş, yalnızca `setTimeout`/event loop boştayken `Debugger.pause`
+     * CDP başarılı olsa bile `Debugger.paused` gecikmeyebilir veya hiç gelmeyebilir — UI durak
+     * görmez (Adım/Devam kapalı kalır). Gerçek paused gelirse zamanlayıcı iptal edilir. */
+    try {
+      if (sess.pauseUiFallbackTimer) {
+        clearTimeout(sess.pauseUiFallbackTimer);
+        sess.pauseUiFallbackTimer = null;
+      }
+      sess.pauseUiFallbackTimer = setTimeout(() => {
+        sess.pauseUiFallbackTimer = null;
+        if (!nodeDebugSession || nodeDebugSession !== sess) return;
+        if (sess.sender && !sess.sender.isDestroyed()) {
+          sendSyntheticPausedPayload(
+            sess.sender,
+            { reason: "other" },
+            "(pause-fallback-idle)",
+            { steppingDisabled: true },
+          );
+        }
+      }, 500);
+    } catch (_) {}
+    return r;
+  });
+
+  ipcMain.handle("debug-node-step-over", async () => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { error: "inspector-disabled" };
+    }
+    return nodeDebugCdpCommand("Debugger.stepOver", {});
+  });
+
+  ipcMain.handle("debug-node-step-into", async () => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { error: "inspector-disabled" };
+    }
+    return nodeDebugCdpCommand("Debugger.stepInto", {});
+  });
+
+  ipcMain.handle("debug-node-step-out", async () => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { error: "inspector-disabled" };
+    }
+    return nodeDebugCdpCommand("Debugger.stepOut", {});
+  });
+
+  ipcMain.handle("debug-node-status", async () => {
+    if (!qubytNodeInspectorEnabled()) {
+      return { active: false };
+    }
+    if (!nodeDebugSession) {
+      return { active: false };
+    }
+    const startedAt = nodeDebugSession.startedAt || 0;
+    return {
+      active: true,
+      pid: nodeDebugSession.child ? nodeDebugSession.child.pid : null,
+      port: nodeDebugSession.port,
+      filePath: nodeDebugSession.filePath,
+      uptimeMs: startedAt ? Date.now() - startedAt : null,
+    };
+  });
+
   /** Terminal komutu: sadece npm, node, npx (izin listesi). Proje kökünde çalışır. */
   ipcMain.handle("run-terminal-command", async (e, commandString) => {
     if (!projectRoot) return { error: "no-project" };
@@ -1957,13 +3351,36 @@ app.whenReady().then(() => {
       // npm install, npm run dev, npx create-react-app vb.
     } else if (firstWord === "node") {
       const parts = raw.slice(5).trim().split(/\s+/);
-      const scriptPath = parts[0];
+      let scriptPath = parts[0];
       if (!scriptPath) return { error: "node-dosya-gerekli" };
-      const resolved = path.resolve(projectRoot, normalizePath(scriptPath));
-      if (!resolved.startsWith(projectRoot)) return { error: "forbidden" };
+      scriptPath = scriptPath.replace(/^["']|["']$/g, "");
+      const norm = normalizePath(scriptPath);
+      const resolved = path.isAbsolute(norm)
+        ? path.resolve(norm)
+        : path.resolve(projectRoot, norm);
+      let underRoot = resolved.startsWith(projectRoot);
+      if (
+        !underRoot &&
+        process.platform === "win32" &&
+        projectRoot &&
+        typeof projectRoot === "string"
+      ) {
+        const rl = resolved.toLowerCase();
+        const pl = path.resolve(normalizePath(projectRoot)).toLowerCase();
+        underRoot =
+          rl === pl || rl.startsWith(pl + path.sep) || rl.startsWith(pl + "/");
+      }
+      if (!underRoot) return { error: "forbidden" };
       const ext = path.extname(resolved).toLowerCase();
       if (ext !== ".js" && ext !== ".mjs") return { error: "node-sadece-js" };
       if (!fs.existsSync(resolved)) return { error: "not-found" };
+      if (
+        nodeDebugSession &&
+        nodeDebugSession.filePath &&
+        debuggerPathsSameFile(resolved, nodeDebugSession.filePath)
+      ) {
+        return { error: "node-debug-conflict" };
+      }
     } else {
       return {
         error: "not-allowed",
@@ -2005,35 +3422,46 @@ app.whenReady().then(() => {
       return;
     }
     activePort = port;
-    ipcMain.on("new-window", () => {
-      createWindow(activePort);
-    });
-    ipcMain.on("renderer-ready", (e) => {
-      const w = BrowserWindow.fromWebContents(e.sender);
-      if (w && w.pendingFolderToOpen) {
-        w.webContents.send("open-folder-on-load", w.pendingFolderToOpen);
-        w.pendingFolderToOpen = null;
-      }
-    });
-    ipcMain.handle("open-folder-in-new-window", async () => {
-      const result = await dialog.showOpenDialog({
-        properties: ["openDirectory"],
+    if (!staticServerIpcRegistered) {
+      staticServerIpcRegistered = true;
+      ipcMain.on("new-window", () => {
+        createWindow(activePort);
       });
-      if (result.canceled || !result.filePaths.length) return { ok: false };
-      const folderPath = path.resolve(normalizePath(result.filePaths[0]));
-      createWindow(activePort, folderPath);
-      return { ok: true };
-    });
-    ipcMain.handle("open-folder-in-new-window-at-path", async (e, dirPath) => {
-      const resolved = path.resolve(normalizePath(dirPath));
-      if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
-        return { ok: false };
-      createWindow(activePort, resolved);
-      return { ok: true };
-    });
-    const folderFromArgv = getFolderFromArgv();
-    runApp(port, folderFromArgv);
+      ipcMain.on("renderer-ready", (e) => {
+        const w = BrowserWindow.fromWebContents(e.sender);
+        if (w && w.pendingFolderToOpen) {
+          w.webContents.send("open-folder-on-load", w.pendingFolderToOpen);
+          w.pendingFolderToOpen = null;
+        }
+      });
+      ipcMain.handle("open-folder-in-new-window", async () => {
+        const result = await dialog.showOpenDialog({
+          properties: ["openDirectory"],
+        });
+        if (result.canceled || !result.filePaths.length) return { ok: false };
+        const folderPath = path.resolve(normalizePath(result.filePaths[0]));
+        createWindow(activePort, folderPath);
+        return { ok: true };
+      });
+      ipcMain.handle(
+        "open-folder-in-new-window-at-path",
+        async (e, dirPath) => {
+          const resolved = path.resolve(normalizePath(dirPath));
+          if (!fs.existsSync(resolved) || !fs.statSync(resolved).isDirectory())
+            return { ok: false };
+          createWindow(activePort, resolved);
+          return { ok: true };
+        },
+      );
+      const folderFromArgv = getFolderFromArgv();
+      runApp(port, folderFromArgv);
+    }
   });
+});
+
+app.on("will-quit", () => {
+  disposeNodeLiveRun();
+  disposeNodeDebugSession();
 });
 
 app.on("window-all-closed", () => {

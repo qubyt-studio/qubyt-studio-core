@@ -1,6 +1,6 @@
 {
   "name": "qubyt-studio",
-  "version": "1.1.8",
+  "version": "1.2.1",
   "description": "Qubyt Studio — modern masaüstü editör (HTML, CSS, JS , TS)",
   "main": "main.js",
   "scripts": {
@@ -24,8 +24,14 @@
     },
     "files": [
       "main.js",
+      "docs/**/*",
+      "blocks/**/*",
+      "template-definitions.js",
+      "library-example-definitions.js",
+      "mini-project-templates.js",
       "lsp-server.js",
       "preload.js",
+      "scripts/icon-paths.js",
       "build/**/*",
       "src/**/*",
       "node_modules/**/*"

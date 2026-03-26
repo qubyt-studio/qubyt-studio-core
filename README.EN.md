@@ -1,11 +1,11 @@
 # 🚀 Qubyt Studio: Modern Code Editor
 
 ![License](https://img.shields.io/badge/license-MIT-blue)
-![Version](https://img.shields.io/badge/version-1.1.8-blue)
+![Version](https://img.shields.io/badge/version-1.2.1-blue)
 ![VirusTotal](https://img.shields.io/badge/VirusTotal-Verified_Clean-brightgreen)
 ![Platform](https://img.shields.io/badge/platform-Windows-lightgrey)
 
-> ✓ **Up to date** — This README reflects the project status as of v1.1.8 (March 2026).
+> ✓ **Up to date** — This README reflects the project status as of v1.2.1 (March 2026).
 
 Qubyt Studio is a desktop code editor designed for web development. With Monaco editor core, Emmet, and ESLint integration, it provides a fast and comfortable development experience for HTML, CSS, JavaScript, and TypeScript.
 
@@ -66,7 +66,7 @@ npm run pack    # Packaging test (--dir)
 We prioritize security as an independent project. Although not yet digitally signed due to certificate costs, our entire codebase is transparently available here.
 
 - **Security Details:** [SECURITY.md](./SECURITY.md) — `sandbox`, `contextIsolation`, path validation, etc.
-- **VirusTotal Report:** [Qubyt Studio 1.1.8.exe](https://www.virustotal.com/gui/file/3347c7e6a78598487db4e0c8d08bd33195041ec30af216fedba25a278b33639c/details) — SHA-256: `3347c7e6...639c`
+- **VirusTotal:** A new scan for the v1.2.1 installer will be linked after `npm run dist`. Last scanned build **v1.2.0:** [Qubyt Studio 1.2.0.exe](https://www.virustotal.com/gui/file/953bccd87492075a85e544410e6e4d056d3491adb9ec8631b929a2ed9c3abcb5/details) — SHA-256: `953bccd8...cb5` — 2026-03-22 UTC.
 
 ## 🛠️ Technologies
 
@@ -78,18 +78,20 @@ We prioritize security as an independent project. Although not yet digitally sig
 
 ## 📜 Changelog
 
-| Version    | Summary                                                                                                                                                                                    |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **v1.1.8** | Shoelace attribute completions; Supported Libraries modal (width, typography, “Limits” per card); suppress Qubyt HTML/CDN/path suggestions inside HTML `<style>`; Chart.js (snippets, `Chart.`, example page); `docs/html-embedded-completion-test.html`; starter types and documentation updates. |
-| **v1.1.7** | Supported Libraries — Alpine.js, htmx, Lodash, dayjs, Axios, Chart.js, Shoelace completion and snippets. x-, @, hx- attribute completions; hx-swap/hx-trigger value suggestions; alpine, htmx, lodash, axios, chart, dayjs, shoelace Emmet; HTML &lt;sl-*&gt; tag completions; Chart. (UMD) completions. |
-| **v1.1.6** | i18n (TR/EN language support). Tab drag-and-drop reordering. Monaco top blue line removal. Explorer-to-editor file drag-and-drop.                                                          |
-| **v1.1.5** | LSP Phase 6: JSON Language Server (package.json, tsconfig.json). Error recovery (auto-restart on server crash). LSP connection fix (editor-ready race condition).                          |
-| **v1.1.4** | Unsaved changes warning when closing app. Explorer shows folder name in title. CSS Builder panel. @import support in Live Page and Markup & Style Analyzer.                                |
-| **v1.1.3** | Project Map system (file structure, Import Graph, Component Graph). "Powered by Electron" removed from status bar and About window.                                                        |
-| **v1.1.2** | Terminal panel tab switching fix (TERMINAL, PROBLEMS, WARNINGS tabs always clickable).                                                                                                     |
-| **v1.1.0** | Live Page — real-time live preview; Layout Inspector to click elements in preview and edit style properties from panel; changes written to CSS file. Markup & Style Analyzer improvements. |
-| **v1.0.9** | Markup & Style Analyzer, ESLint extension, Presentation mode (Ctrl+Shift+P), Activity heatmap.                                                                                             |
-| **v1.0.8** | Note System, Debug Tools, Markdown preview (Mermaid, task lists), Developer Insights dashboard.                                                                                            |
+| Version    | Summary                                                                                                                                                                                                                                                                                                   |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **v1.2.1** | Learning Mode (experimental); Explorer F2 / Delete when tree focused; Component Gallery **Starter projects** tab; mini-project sample improvements; inline code emphasis in library examples.                                                                                                              |
+| **v1.2.0** | Component Gallery: `components/` onboarding, `components.json` for card metadata and folder groups. **Blocks & catalog** tab: `blocks/`, `blocks.json`, root `qubyt-insert-catalog.json` for insert from any project path. Bundled **Qubyt Theme** (Version 2 palette). Gallery typography and library safety notice UI. |
+| **v1.1.8** | Shoelace attribute completions; Supported Libraries modal (width, typography, “Limits” per card); suppress Qubyt HTML/CDN/path suggestions inside HTML `<style>`; Chart.js (snippets, `Chart.`, example page); `docs/html-embedded-completion-test.html`; starter types and documentation updates.        |
+| **v1.1.7** | Supported Libraries — Alpine.js, htmx, Lodash, dayjs, Axios, Chart.js, Shoelace completion and snippets. x-, @, hx- attribute completions; hx-swap/hx-trigger value suggestions; alpine, htmx, lodash, axios, chart, dayjs, shoelace Emmet; HTML &lt;sl-\*&gt; tag completions; Chart. (UMD) completions. |
+| **v1.1.6** | i18n (TR/EN language support). Tab drag-and-drop reordering. Monaco top blue line removal. Explorer-to-editor file drag-and-drop.                                                                                                                                                                         |
+| **v1.1.5** | LSP Phase 6: JSON Language Server (package.json, tsconfig.json). Error recovery (auto-restart on server crash). LSP connection fix (editor-ready race condition).                                                                                                                                         |
+| **v1.1.4** | Unsaved changes warning when closing app. Explorer shows folder name in title. CSS Builder panel. @import support in Live Page and Markup & Style Analyzer.                                                                                                                                               |
+| **v1.1.3** | Project Map system (file structure, Import Graph, Component Graph). "Powered by Electron" removed from status bar and About window.                                                                                                                                                                       |
+| **v1.1.2** | Terminal panel tab switching fix (TERMINAL, PROBLEMS, WARNINGS tabs always clickable).                                                                                                                                                                                                                    |
+| **v1.1.0** | Live Page — real-time live preview; Layout Inspector to click elements in preview and edit style properties from panel; changes written to CSS file. Markup & Style Analyzer improvements.                                                                                                                |
+| **v1.0.9** | Markup & Style Analyzer, ESLint extension, Presentation mode (Ctrl+Shift+P), Activity heatmap.                                                                                                                                                                                                            |
+| **v1.0.8** | Note System, Debug Tools, Markdown preview (Mermaid, task lists), Developer Insights dashboard.                                                                                                                                                                                                           |
 
 ## 🌐 Our Ecosystem
 
